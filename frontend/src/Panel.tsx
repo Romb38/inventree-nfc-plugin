@@ -12,12 +12,14 @@ import {
   Button,
   Group,
   Loader,
+  NumberInput,
+  Select,
   Stack,
   Text,
   Title
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconLink, IconTrash, IconWifi } from '@tabler/icons-react';
+import { IconLink, IconMinus, IconPlus, IconTrash, IconWifi } from '@tabler/icons-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { LocalizedComponent } from './locale';
@@ -43,6 +45,21 @@ interface ScanResult {
   // Agent returns { uid: "AABBCCDD" } on success, or { error: "timeout" | "no_reader" }
   uid?: string;
   error?: string;
+}
+
+interface StockItemOption {
+  id: number;
+  quantity: number;
+  location: string | null;
+  batch: string | null;
+}
+
+interface StockItemsResponse {
+  found: boolean;
+  uid?: string;
+  part_id?: number;
+  part_name?: string;
+  stock_items?: StockItemOption[];
 }
 
 interface TagLookupResult {
@@ -439,6 +456,11 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
       const res = await context.api.get(`/plugin/nfc/tag/${uid}/`);
       const data: TagLookupResult = res.data;
       setFindResult(data);
+      if (data.found) {
+        setAdjustUid(uid);
+        setSelectedStockId(null);
+        setAdjustQty(1);
+      }
 
       playSound(config.sound_enabled, 'success');
       if (data.found && config.auto_redirect && data.part_url) {
@@ -463,6 +485,64 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
       setFindScanning(false);
     }
   }, [config, findScanning, context.api, context.navigate]);
+
+  // Stock adjust (Path A): tag names the part, user picks a stock item
+  const [adjustUid, setAdjustUid] = useState<string | null>(null);
+  const [selectedStockId, setSelectedStockId] = useState<string | null>(null);
+  const [adjustQty, setAdjustQty] = useState<number | string>(1);
+
+  const stockItemsQuery = useQuery<StockItemsResponse>(
+    {
+      queryKey: ['nfc-stock-items', adjustUid],
+      enabled: !!adjustUid,
+      queryFn: () =>
+        context.api
+          .get(`/plugin/nfc/stock-items/${adjustUid}/`)
+          .then((r) => r.data),
+      staleTime: 0
+    },
+    context.queryClient
+  );
+
+  const stockItems = stockItemsQuery.data?.stock_items ?? [];
+
+  // Auto-select when the part has exactly one stock item
+  const effectiveStockId = useMemo(() => {
+    if (selectedStockId) return selectedStockId;
+    if (stockItems.length === 1) return String(stockItems[0].id);
+    return null;
+  }, [selectedStockId, stockItems]);
+
+  const stockMutation = useMutation(
+    {
+      mutationFn: (vars: { action: 'add' | 'remove' }) =>
+        context.api.post('/plugin/nfc/stock/', {
+          uid: adjustUid,
+          stock_item_id: effectiveStockId,
+          quantity: adjustQty,
+          action: vars.action
+        }),
+      onSuccess: (res, vars) => {
+        playSound(config!.sound_enabled, 'success');
+        notifications.show({
+          title: vars.action === 'add' ? t`Stock added` : t`Stock removed`,
+          message: `${res.data.part_name}: ${res.data.new_stock}`,
+          color: 'green'
+        });
+        stockItemsQuery.refetch();
+        if (findResult) setFindResult({ ...findResult, total_stock: res.data.new_stock });
+      },
+      onError: (err: any) => {
+        playSound(config!.sound_enabled, 'error');
+        notifications.show({
+          title: t`Stock update failed`,
+          message: err?.response?.data?.error ?? t`Could not update stock.`,
+          color: 'red'
+        });
+      }
+    },
+    context.queryClient
+  );
 
   // Render
   if (configQuery.isLoading) {
@@ -633,6 +713,66 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                       <Text size='sm'>
                         {t`Stock:`} {findResult.total_stock ?? '—'}
                       </Text>
+
+                      {stockItemsQuery.isLoading ? (
+                        <Group gap='xs'>
+                          <Loader size='xs' />
+                          <Text size='xs' c='dimmed'>{t`Loading stock...`}</Text>
+                        </Group>
+                      ) : stockItems.length === 0 ? (
+                        <Text size='xs' c='dimmed'>
+                          {t`No stock items available to adjust.`}
+                        </Text>
+                      ) : (
+                        <Stack gap='xs' mt={4}>
+                          {stockItems.length > 1 && (
+                            <Select
+                              size='xs'
+                              label={t`Stock item`}
+                              placeholder={t`Choose location`}
+                              value={effectiveStockId}
+                              onChange={setSelectedStockId}
+                              data={stockItems.map((si) => ({
+                                value: String(si.id),
+                                label: `${si.location ?? t`No location`}${si.batch ? ` · ${si.batch}` : ''} — ${si.quantity}`
+                              }))}
+                            />
+                          )}
+
+                          <NumberInput
+                            size='xs'
+                            label={t`Quantity`}
+                            min={1}
+                            value={adjustQty}
+                            onChange={setAdjustQty}
+                          />
+
+                          <Group grow gap='xs'>
+                            <Button
+                              size='xs'
+                              color='green'
+                              variant='light'
+                              leftSection={<IconPlus size={14} />}
+                              disabled={!effectiveStockId}
+                              loading={stockMutation.isPending}
+                              onClick={() => stockMutation.mutate({ action: 'add' })}
+                            >
+                              {t`Add`}
+                            </Button>
+                            <Button
+                              size='xs'
+                              color='red'
+                              variant='light'
+                              leftSection={<IconMinus size={14} />}
+                              disabled={!effectiveStockId}
+                              loading={stockMutation.isPending}
+                              onClick={() => stockMutation.mutate({ action: 'remove' })}
+                            >
+                              {t`Remove`}
+                            </Button>
+                          </Group>
+                        </Stack>
+                      )}
 
                       <Button
                         size='xs'
