@@ -130,9 +130,11 @@ class NFCStockView(APIView):
         action = str(request.data.get("action", "add")).strip().lower()
         notes = str(request.data.get("notes", f"NFC {action}")).strip()
 
+        from decimal import Decimal, InvalidOperation
+
         try:
-            quantity = float(request.data.get("quantity", 0))
-        except (TypeError, ValueError):
+            quantity = Decimal(str(request.data.get("quantity", 0)))
+        except (TypeError, ValueError, InvalidOperation):
             return Response(
                 {"error": "Quantity must be a number."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -152,23 +154,28 @@ class NFCStockView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        try:
-            stock_item = StockItem.objects.get(pk=stock_item_id, part=link.part)
-        except StockItem.DoesNotExist:
-            return Response(
-                {"error": f"Matching stock item not found for linked part '{link.part.name}'."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
+        from django.db import transaction
 
-        if action == "remove":
-            if stock_item.quantity < quantity:
-                return Response(
-                    {"error": f"Not enough stock. Available: {stock_item.quantity}."},
-                    status=status.HTTP_400_BAD_REQUEST,
+        with transaction.atomic():
+            try:
+                stock_item = StockItem.objects.select_for_update().get(
+                    pk=stock_item_id, part=link.part
                 )
-            stock_item.take_stock(quantity, request.user, notes=notes)
-        else:
-            stock_item.add_stock(quantity, request.user, notes=notes)
+            except StockItem.DoesNotExist:
+                return Response(
+                    {"error": f"Matching stock item not found for linked part '{link.part.name}'."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+            if action == "remove":
+                if stock_item.quantity < quantity:
+                    return Response(
+                        {"error": f"Not enough stock. Available: {stock_item.quantity}."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                stock_item.remove_stock(quantity, request.user, notes=notes)
+            else:
+                stock_item.add_stock(quantity, request.user, notes=notes)
 
         stock_item.refresh_from_db()
 
@@ -176,7 +183,7 @@ class NFCStockView(APIView):
             "success": True,
             "part_name": link.part.name,
             "action": action,
-            "quantity_changed": quantity,
+            "quantity_changed": str(quantity),
             "new_stock": float(stock_item.quantity),
         })
 
@@ -231,3 +238,44 @@ class NFCUnlinkView(APIView):
                 {"error": f"No active link found for UID {uid}."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+class NFCStockItemsView(APIView):
+    """
+    GET /stock-items/<uid>/
+    List the in-stock StockItems for the part linked to an NFC tag.
+    Powers the Path A picker: the tag names the Part, the user picks the StockItem.
+    """
+
+    permission_classes: ClassVar = [permissions.IsAuthenticated]
+
+    def get(self, request, uid, *args, **kwargs):
+        from stock.models import StockItem
+        from .models import NFCTagLink
+
+        uid = uid.strip().upper()
+
+        try:
+            link = NFCTagLink.objects.select_related("part").get(uid=uid, active=True)
+        except NFCTagLink.DoesNotExist:
+            return Response({"found": False, "uid": uid})
+
+        items = (
+            StockItem.objects.filter(part=link.part, quantity__gt=0)
+            .select_related("location")
+            .order_by("-quantity")
+        )
+
+        return Response({
+            "found": True,
+            "uid": uid,
+            "part_id": link.part.pk,
+            "part_name": link.part.name,
+            "stock_items": [
+                {
+                    "id": si.pk,
+                    "quantity": float(si.quantity),
+                    "location": si.location.name if si.location else None,
+                    "batch": si.batch or None,
+                }
+                for si in items
+            ],
+        })

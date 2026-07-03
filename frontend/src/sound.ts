@@ -12,6 +12,5 @@ export function playSound(enabled: boolean, sound: NfcSoundName) {
     audio.volume = 0.5;
     void audio.play().catch(() => {});
   } catch {
-    // silently ignore
   }
 }
