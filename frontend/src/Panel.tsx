@@ -751,7 +751,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                             <Button
                               size='xs'
                               color='green'
-                              variant='light'
+                              variant='filled'
                               leftSection={<IconPlus size={14} />}
                               disabled={!effectiveStockId}
                               loading={stockMutation.isPending}
@@ -762,7 +762,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                             <Button
                               size='xs'
                               color='red'
-                              variant='light'
+                              variant='filled'
                               leftSection={<IconMinus size={14} />}
                               disabled={!effectiveStockId}
                               loading={stockMutation.isPending}
