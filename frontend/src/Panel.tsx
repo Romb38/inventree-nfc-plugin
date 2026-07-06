@@ -25,6 +25,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { LocalizedComponent } from './locale';
 import { playSound } from './sound';
 
+// Trim trailing zeros: 65.0000 -> "65", 65.5000 -> "65.5"
+function fmtQty(v: number | string | null | undefined): string {
+  if (v === null || v === undefined) return '—';
+  const n = typeof v === 'string' ? parseFloat(v) : v;
+  if (Number.isNaN(n)) return String(v);
+  return String(Number(n));
+}
+
 interface NfcConfig {
   agent_base_url: string;
   scan_timeout_seconds: number;
@@ -513,20 +521,32 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
     return null;
   }, [selectedStockId, stockItems]);
 
+  const selectedAvailable = useMemo(() => {
+    const si = stockItems.find((s) => String(s.id) === effectiveStockId);
+    return si ? si.quantity : null;
+  }, [stockItems, effectiveStockId]);
+
   const stockMutation = useMutation(
     {
-      mutationFn: (vars: { action: 'add' | 'remove' }) =>
-        context.api.post('/plugin/nfc/stock/', {
+      mutationFn: (vars: { action: 'add' | 'remove' }) => {
+        const qty = typeof adjustQty === 'string' ? parseFloat(adjustQty) : adjustQty;
+        if (!effectiveStockId || !qty || qty <= 0) {
+          return Promise.reject({
+            response: { data: { error: 'Select a stock item and a quantity greater than 0.' } }
+          });
+        }
+        return context.api.post('/plugin/nfc/stock/', {
           uid: adjustUid,
           stock_item_id: effectiveStockId,
-          quantity: adjustQty,
+          quantity: qty,
           action: vars.action
-        }),
+        });
+      },
       onSuccess: (res, vars) => {
         playSound(config!.sound_enabled, 'success');
         notifications.show({
           title: vars.action === 'add' ? t`Stock added` : t`Stock removed`,
-          message: `${res.data.part_name}: ${res.data.new_stock}`,
+          message: `${res.data.part_name}: ${fmtQty(res.data.new_stock)}`,
           color: 'green'
         });
         stockItemsQuery.refetch();
@@ -711,7 +731,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                       )}
 
                       <Text size='sm'>
-                        {t`Stock:`} {findResult.total_stock ?? '—'}
+                        {t`Stock:`} {fmtQty(findResult.total_stock)}
                       </Text>
 
                       {stockItemsQuery.isLoading ? (
@@ -734,7 +754,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                               onChange={setSelectedStockId}
                               data={stockItems.map((si) => ({
                                 value: String(si.id),
-                                label: `${si.location ?? t`No location`}${si.batch ? ` · ${si.batch}` : ''} — ${si.quantity}`
+                                label: `${si.location ?? t`No location`}${si.batch ? ` · ${si.batch}` : ''} — ${fmtQty(si.quantity)}`
                               }))}
                             />
                           )}
@@ -742,6 +762,11 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                           <NumberInput
                             size='xs'
                             label={t`Quantity`}
+                            description={
+                              selectedAvailable !== null
+                                ? `${t`Available in this item:`} ${fmtQty(selectedAvailable)}`
+                                : undefined
+                            }
                             min={1}
                             value={adjustQty}
                             onChange={setAdjustQty}
@@ -753,7 +778,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                               color='green'
                               variant='filled'
                               leftSection={<IconPlus size={14} />}
-                              disabled={!effectiveStockId}
+                              disabled={!effectiveStockId || stockMutation.isPending}
                               loading={stockMutation.isPending}
                               onClick={() => stockMutation.mutate({ action: 'add' })}
                             >
@@ -764,7 +789,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                               color='red'
                               variant='filled'
                               leftSection={<IconMinus size={14} />}
-                              disabled={!effectiveStockId}
+                              disabled={!effectiveStockId || stockMutation.isPending}
                               loading={stockMutation.isPending}
                               onClick={() => stockMutation.mutate({ action: 'remove' })}
                             >

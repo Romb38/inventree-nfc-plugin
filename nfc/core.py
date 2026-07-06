@@ -160,4 +160,3 @@ class NFC(
                 "source": self.plugin_static_file("Spotlight.js:NFCSpotlightAction"),
             }
         ]
-    

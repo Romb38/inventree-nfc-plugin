@@ -8,6 +8,49 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 
+def _adjust_stock(stock_item, action, quantity, user, notes):
+    """
+    Adjust stock in a way that survives InvenTree version differences.
+
+    Different versions expose different method names on StockItem
+    (add_stock/remove_stock, addStock/removeStock) or none at all.
+    We try the model methods first, then fall back to a direct
+    quantity write + tracking entry.
+    """
+    candidates = {
+        "add": ["add_stock", "addStock"],
+        "remove": ["take_stock", "removeStock", "remove_stock"],
+    }[action]
+
+    for name in candidates:
+        method = getattr(stock_item, name, None)
+        if callable(method):
+            import logging
+            logging.getLogger("inventree").info("NFC: stock %s via StockItem.%s()", action, name)
+            try:
+                return method(quantity, user, notes=notes)
+            except TypeError:
+                # Some signatures don't accept notes as kwarg
+                return method(quantity, user)
+
+    # Fallback: write the quantity directly and log a tracking entry.
+    from decimal import Decimal
+    delta = quantity if action == "add" else -quantity
+    stock_item.quantity = Decimal(str(stock_item.quantity)) + Decimal(str(delta))
+    stock_item.save()
+    try:
+        from stock.models import StockItemTracking
+        StockItemTracking.objects.create(
+            item=stock_item,
+            user=user,
+            notes=notes or f"NFC {action} {quantity}",
+            deltas={"quantity": float(stock_item.quantity), "added": float(delta)},
+        )
+    except Exception:
+        pass  # tracking is best-effort; quantity change already saved
+    return stock_item
+
+
 class NFCConfigView(APIView):
     permission_classes: ClassVar = [permissions.IsAuthenticated]
 
@@ -125,6 +168,9 @@ class NFCStockView(APIView):
         from stock.models import StockItem
         from .models import NFCTagLink
 
+        import logging
+        logging.getLogger("inventree").warning("NFC stock POST body: %r", dict(request.data))
+
         uid = str(request.data.get("uid", "")).strip().upper()
         stock_item_id = request.data.get("stock_item_id")
         action = str(request.data.get("action", "add")).strip().lower()
@@ -140,9 +186,16 @@ class NFCStockView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if not uid or not stock_item_id or quantity <= 0:
+        missing = []
+        if not uid:
+            missing.append("uid")
+        if not stock_item_id:
+            missing.append("stock_item_id")
+        if quantity <= 0:
+            missing.append("quantity > 0")
+        if missing:
             return Response(
-                {"error": "uid, stock_item_id and quantity > 0 are required."},
+                {"error": f"Missing/invalid: {', '.join(missing)}."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -169,13 +222,14 @@ class NFCStockView(APIView):
 
             if action == "remove":
                 if stock_item.quantity < quantity:
+                    available = stock_item.quantity.normalize()
                     return Response(
-                        {"error": f"Not enough stock. Available: {stock_item.quantity}."},
+                        {"error": f"Not enough stock. Available: {available:f}."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                stock_item.remove_stock(quantity, request.user, notes=notes)
+                _adjust_stock(stock_item, "remove", quantity, request.user, notes)
             else:
-                stock_item.add_stock(quantity, request.user, notes=notes)
+                _adjust_stock(stock_item, "add", quantity, request.user, notes)
 
         stock_item.refresh_from_db()
 
