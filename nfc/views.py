@@ -51,6 +51,53 @@ def _adjust_stock(stock_item, action, quantity, user, notes):
     return stock_item
 
 
+def _serialize_tube(stock_item):
+    """
+    Serialize one StockItem (tube) for display.
+
+    Native InvenTree fields: quantity, batch, expiry_date, location, status.
+    Non-native lab fields live in stock_item.metadata (a JSON dict) so display
+    stays consistent: every field is always present, None when unset.
+    """
+    meta = stock_item.metadata or {}
+
+    def m(key):
+        return meta.get(key)
+
+    return {
+        "id": stock_item.pk,
+        "quantity": float(stock_item.quantity),
+        "batch": stock_item.batch or None,
+        "expiry_date": stock_item.expiry_date.isoformat() if stock_item.expiry_date else None,
+        "location": stock_item.location.name if stock_item.location else None,
+        "status_label": stock_item.get_status_display() if hasattr(stock_item, "get_status_display") else None,
+        # Non-native lab fields (from metadata)
+        "concentration": m("concentration"),
+        "measured_ph": m("measured_ph"),
+        "received_date": m("received_date"),
+        "opened_date": m("opened_date"),
+        "purity": m("purity"),
+        "manufacturer": m("manufacturer"),
+    }
+
+
+def _serialize_part(part):
+    """Serialize the shared product (Part) info."""
+    params = {}
+    try:
+        for p in part.get_parameters():
+            params[p.template.name] = p.data
+    except Exception:
+        pass
+    return {
+        "part_id": part.pk,
+        "part_name": part.name,
+        "part_description": part.description,
+        "total_stock": float(part.total_stock),
+        "parameters": params,  # CAS, form, spec_ph, etc. if configured as Part parameters
+    }
+
+
 class NFCConfigView(APIView):
     permission_classes: ClassVar = [permissions.IsAuthenticated]
 
@@ -69,80 +116,91 @@ class NFCConfigView(APIView):
 class NFCTagView(APIView):
     """
     GET /tag/<uid>/
-    Check if an NFC tag UID is linked to a Part.
+    Resolve an NFC tag UID to its tube (StockItem), and return:
+      - the shared product (Part) info
+      - the scanned tube (highlighted, the default add/remove target)
+      - sibling tubes (other StockItems of the same Part)
     """
 
     permission_classes: ClassVar = [permissions.IsAuthenticated]
 
     def get(self, request, uid, *args, **kwargs):
-        """
-        GET part linked to the NFC tag
-        """
-
+        from stock.models import StockItem
         from .models import NFCTagLink
 
         uid = uid.strip().upper()
 
         try:
-            link = NFCTagLink.objects.get(uid=uid.upper(), active = True)
-            part = link.part
-            return Response({
-                "found": True,
-                "uid": uid.upper(),
-                "part_id": part.pk,
-                "part_name": part.name,
-                "part_description": part.description,
-                "total_stock": float(part.total_stock),
-                "part_url": f"/part/{part.pk}/",
-            })
+            link = NFCTagLink.objects.select_related(
+                "stock_item", "stock_item__part", "stock_item__location"
+            ).get(uid=uid, active=True)
         except NFCTagLink.DoesNotExist:
-            return Response({"found": False, "uid": uid.upper()})
+            return Response({"found": False, "uid": uid})
+
+        tube = link.stock_item
+        part = tube.part
+
+        siblings = (
+            StockItem.objects.filter(part=part)
+            .exclude(pk=tube.pk)
+            .select_related("location")
+            .order_by("expiry_date", "-quantity")
+        )
+
+        return Response({
+            "found": True,
+            "uid": uid,
+            "part": _serialize_part(part),
+            "scanned_tube": _serialize_tube(tube),
+            "sibling_tubes": [_serialize_tube(si) for si in siblings],
+            "part_url": f"/part/{part.pk}/",
+        })
 
 class NFCLinkView(APIView):
     """
     POST /link/
-    Link an NFC tag UID to an InvenTree Part.
-    Body: { "uid": "AABBCCDD", "part_id": 42 }
+    Link an NFC tag UID to a specific StockItem (tube).
+    Body: { "uid": "AABBCCDD", "stock_item_id": 42 }
     """
 
     permission_classes: ClassVar = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        from part.models import Part
+        from stock.models import StockItem
         from .models import NFCTagLink
 
         uid = str(request.data.get("uid", "")).strip().upper()
-        part_id = request.data.get("part_id")
+        stock_item_id = request.data.get("stock_item_id")
 
-        if not uid or not part_id:
+        if not uid or not stock_item_id:
             return Response(
-                {"error": "Both 'uid' and 'part_id' are required."},
+                {"error": "Both 'uid' and 'stock_item_id' are required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
-            part = Part.objects.get(pk=part_id)
-        except Part.DoesNotExist:
+            stock_item = StockItem.objects.select_related("part").get(pk=stock_item_id)
+        except StockItem.DoesNotExist:
             return Response(
-                {"error": f"Part with id {part_id} not found."},
+                {"error": f"Stock item with id {stock_item_id} not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         if NFCTagLink.objects.filter(uid=uid, active=True).exists():
             return Response(
-                {"error": f"Tag {uid} is already linked to a part. Unlink it first."},
+                {"error": f"Tag {uid} is already linked. Unlink it first."},
                 status=status.HTTP_409_CONFLICT,
             )
 
-        if NFCTagLink.objects.filter(part=part, active=True).exists():
+        if NFCTagLink.objects.filter(stock_item=stock_item, active=True).exists():
             return Response(
-                {"error": f"Part '{part.name}' already has an active NFC tag linked. Unlink it first."},
+                {"error": "This tube already has an active NFC tag. Unlink it first."},
                 status=status.HTTP_409_CONFLICT,
             )
 
         link = NFCTagLink.objects.create(
             uid=uid,
-            part=part,
+            stock_item=stock_item,
             linked_by=request.user,
             active=True,
         )
@@ -151,8 +209,8 @@ class NFCLinkView(APIView):
             "success": True,
             "created": True,
             "uid": link.uid,
-            "part_id": part.pk,
-            "part_name": part.name,
+            "stock_item_id": stock_item.pk,
+            "part_name": stock_item.part.name,
         })
 
 class NFCStockView(APIView):
@@ -172,6 +230,8 @@ class NFCStockView(APIView):
         logging.getLogger("inventree").warning("NFC stock POST body: %r", dict(request.data))
 
         uid = str(request.data.get("uid", "")).strip().upper()
+        # Optional: adjust a specific tube (e.g. a sibling the user tapped).
+        # If omitted, we adjust the tube the tag is linked to.
         stock_item_id = request.data.get("stock_item_id")
         action = str(request.data.get("action", "add")).strip().lower()
         notes = str(request.data.get("notes", f"NFC {action}")).strip()
@@ -189,8 +249,6 @@ class NFCStockView(APIView):
         missing = []
         if not uid:
             missing.append("uid")
-        if not stock_item_id:
-            missing.append("stock_item_id")
         if quantity <= 0:
             missing.append("quantity > 0")
         if missing:
@@ -200,23 +258,29 @@ class NFCStockView(APIView):
             )
 
         try:
-            link = NFCTagLink.objects.select_related("part").get(uid=uid, active=True)
+            link = NFCTagLink.objects.select_related("stock_item", "stock_item__part").get(
+                uid=uid, active=True
+            )
         except NFCTagLink.DoesNotExist:
             return Response(
-                {"error": "Tag not linked to any active part."},
+                {"error": "Tag not linked to any active tube."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        part = link.stock_item.part
 
         from django.db import transaction
 
         with transaction.atomic():
+            # Default target = the linked tube. Optionally a sibling of same part.
+            target_id = stock_item_id or link.stock_item_id
             try:
                 stock_item = StockItem.objects.select_for_update().get(
-                    pk=stock_item_id, part=link.part
+                    pk=target_id, part=part
                 )
             except StockItem.DoesNotExist:
                 return Response(
-                    {"error": f"Matching stock item not found for linked part '{link.part.name}'."},
+                    {"error": "Target tube not found for this product."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
@@ -235,7 +299,7 @@ class NFCStockView(APIView):
 
         return Response({
             "success": True,
-            "part_name": link.part.name,
+            "part_name": part.name,
             "action": action,
             "quantity_changed": str(quantity),
             "new_stock": float(stock_item.quantity),
@@ -244,8 +308,8 @@ class NFCStockView(APIView):
 class NFCTagByPartView(APIView):
     """
     GET /tag/by-part/<part_id>/
-    Returns the NFC tag linked to a given part, or not_found.
-    Used by the Part detail panel to show current tag status.
+    Returns all NFC tags linked to tubes of a given part.
+    Used by the Part detail panel to show which tubes are tagged.
     """
 
     permission_classes: ClassVar = [permissions.IsAuthenticated]
@@ -253,20 +317,24 @@ class NFCTagByPartView(APIView):
     def get(self, request, part_id, *args, **kwargs):
         from .models import NFCTagLink
 
-        try:
-            link = NFCTagLink.objects.select_related("part", "linked_by").get(
-                part_id=part_id, active=True
-            )
-            return Response({
-                "found": True,
-                "uid": link.uid,
-                "part_id": link.part.pk,
-                "part_name": link.part.name,
-                "linked_at": link.linked_at,
-                "linked_by": link.linked_by.username if link.linked_by else None,
-            })
-        except NFCTagLink.DoesNotExist:
-            return Response({"found": False, "part_id": part_id})
+        links = NFCTagLink.objects.select_related(
+            "stock_item", "linked_by"
+        ).filter(stock_item__part_id=part_id, active=True)
+
+        return Response({
+            "found": links.exists(),
+            "part_id": part_id,
+            "tags": [
+                {
+                    "uid": link.uid,
+                    "stock_item_id": link.stock_item_id,
+                    "batch": link.stock_item.batch or None,
+                    "linked_at": link.linked_at,
+                    "linked_by": link.linked_by.username if link.linked_by else None,
+                }
+                for link in links
+            ],
+        })
 
 class NFCUnlinkView(APIView):
     """
@@ -295,8 +363,8 @@ class NFCUnlinkView(APIView):
 class NFCStockItemsView(APIView):
     """
     GET /stock-items/<uid>/
-    List the in-stock StockItems for the part linked to an NFC tag.
-    Powers the Path A picker: the tag names the Part, the user picks the StockItem.
+    List all tubes (StockItems) of the part linked to a scanned tag.
+    Kept for compatibility; the scan endpoint already returns siblings.
     """
 
     permission_classes: ClassVar = [permissions.IsAuthenticated]
@@ -308,28 +376,22 @@ class NFCStockItemsView(APIView):
         uid = uid.strip().upper()
 
         try:
-            link = NFCTagLink.objects.select_related("part").get(uid=uid, active=True)
+            link = NFCTagLink.objects.select_related("stock_item", "stock_item__part").get(
+                uid=uid, active=True
+            )
         except NFCTagLink.DoesNotExist:
             return Response({"found": False, "uid": uid})
 
+        part = link.stock_item.part
         items = (
-            StockItem.objects.filter(part=link.part, quantity__gt=0)
+            StockItem.objects.filter(part=part)
             .select_related("location")
-            .order_by("-quantity")
+            .order_by("expiry_date", "-quantity")
         )
 
         return Response({
             "found": True,
             "uid": uid,
-            "part_id": link.part.pk,
-            "part_name": link.part.name,
-            "stock_items": [
-                {
-                    "id": si.pk,
-                    "quantity": float(si.quantity),
-                    "location": si.location.name if si.location else None,
-                    "batch": si.batch or None,
-                }
-                for si in items
-            ],
+            "part": _serialize_part(part),
+            "stock_items": [_serialize_tube(si) for si in items],
         })
