@@ -7,11 +7,13 @@ import { t } from '@lingui/core/macro';
 import {
   Accordion,
   Alert,
+  Anchor,
   Badge,
   Box,
   Button,
   Group,
   Loader,
+  Modal,
   NumberInput,
   Stack,
   Text,
@@ -501,6 +503,9 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
   // Stock adjust: the scanned tube is the target (no picker).
   const [adjustQty, setAdjustQty] = useState<number | string>(1);
 
+  // Confirm popup before navigating to a tube's stock item page
+  const [tubeToVisit, setTubeToVisit] = useState<Tube | null>(null);
+
   const scannedTube = findResult?.scanned_tube ?? null;
 
   const stockMutation = useMutation(
@@ -566,6 +571,36 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
 
   return (
     <>
+      <Modal
+        opened={!!tubeToVisit}
+        onClose={() => setTubeToVisit(null)}
+        title={t`Go to this tube?`}
+        centered
+        size='sm'
+      >
+        <Stack gap='sm'>
+          <Text size='sm'>
+            {t`Open the stock item page for lot`}{' '}
+            <strong>{tubeToVisit?.batch ?? '—'}</strong>?
+          </Text>
+          <Group justify='flex-end' gap='xs'>
+            <Button variant='default' size='xs' onClick={() => setTubeToVisit(null)}>
+              {t`Cancel`}
+            </Button>
+            <Button
+              size='xs'
+              color='teal'
+              onClick={() => {
+                if (tubeToVisit) context.navigate(`/stock/item/${tubeToVisit.id}/`);
+                setTubeToVisit(null);
+              }}
+            >
+              {t`Go to stock item`}
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
       <Group gap='xs' mb='sm'>
         <Box
           w={10}
@@ -706,7 +741,13 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                     <Stack gap='sm'>
                       {/* ZONE 1 — product (shared info) */}
                       <div>
-                        <Text fw={600}>{findResult.part.part_name}</Text>
+                        <Anchor
+                          fw={600}
+                          onClick={() => context.navigate(findResult.part_url!)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          {findResult.part.part_name}
+                        </Anchor>
                         {findResult.part.part_description && (
                           <Text size='sm' c='dimmed'>
                             {findResult.part.part_description}
@@ -730,9 +771,15 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                         }}
                       >
                         <Group justify='space-between' mb={4}>
-                          <Text fw={600} size='sm'>
+                          <Anchor
+                            fw={600}
+                            component='button'
+                            type='button'
+                            style={{ fontSize: 'var(--mantine-font-size-sm)' }}
+                            onClick={() => setTubeToVisit(findResult.scanned_tube!)}
+                          >
                             {t`Scanned tube`}
-                          </Text>
+                          </Anchor>
                           <Badge color='teal' variant='light'>
                             {findResult.scanned_tube.batch ?? t`No lot`}
                           </Badge>
@@ -794,10 +841,12 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                             {findResult.sibling_tubes.map((s) => (
                               <Box
                                 key={s.id}
+                                onClick={() => setTubeToVisit(s)}
                                 style={{
                                   border: '1px solid var(--mantine-color-gray-4)',
                                   borderRadius: 6,
-                                  padding: 6
+                                  padding: 6,
+                                  cursor: 'pointer'
                                 }}
                               >
                                 <Text size='xs'>
@@ -825,7 +874,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                   <Alert color='yellow' title={t`Unknown tag`}>
                     <Stack gap='xs'>
                       <Text size='sm'>
-                        {t`No part linked to`}{' '}
+                        {t`No tube linked to`}{' '}
                         <Badge variant='outline'>{findResult.uid}</Badge>
                       </Text>
 

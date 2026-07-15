@@ -153,7 +153,7 @@ class NFCTagView(APIView):
             "part": _serialize_part(part),
             "scanned_tube": _serialize_tube(tube),
             "sibling_tubes": [_serialize_tube(si) for si in siblings],
-            "part_url": f"/part/{part.pk}/",
+            "part_url": f"/part/{part.pk}/details",
         })
 
 class NFCLinkView(APIView):
@@ -395,3 +395,4 @@ class NFCStockItemsView(APIView):
             "part": _serialize_part(part),
             "stock_items": [_serialize_tube(si) for si in items],
         })
+        

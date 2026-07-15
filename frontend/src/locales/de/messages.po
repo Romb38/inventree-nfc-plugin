@@ -42,33 +42,33 @@ msgstr ""
 #~ msgstr ""
 
 #: src/Dashboard.tsx:218
-#: src/Panel.tsx:489
+#: src/Panel.tsx:491
 msgid "Scan failed"
 msgstr ""
 
 #: src/Dashboard.tsx:251
-#: src/Panel.tsx:588
+#: src/Panel.tsx:623
 msgid "Checking reader..."
 msgstr ""
 
 #: src/Dashboard.tsx:253
-#: src/Panel.tsx:590
+#: src/Panel.tsx:625
 msgid "Agent not reachable"
 msgstr ""
 
 #: src/Dashboard.tsx:255
-#: src/Panel.tsx:592
+#: src/Panel.tsx:627
 msgid "Reader connected"
 msgstr ""
 
 #: src/Dashboard.tsx:256
-#: src/Panel.tsx:593
+#: src/Panel.tsx:628
 msgid "Reader not available"
 msgstr ""
 
 #: src/Dashboard.tsx:269
-#: src/Panel.tsx:670
-#: src/Panel.tsx:700
+#: src/Panel.tsx:705
+#: src/Panel.tsx:735
 msgid "Waiting for tag..."
 msgstr ""
 
@@ -89,12 +89,11 @@ msgid "Go to part"
 msgstr ""
 
 #: src/Dashboard.tsx:324
-#: src/Panel.tsx:825
+#: src/Panel.tsx:874
 msgid "Unknown tag"
 msgstr ""
 
 #: src/Dashboard.tsx:326
-#: src/Panel.tsx:828
 msgid "No part linked to"
 msgstr ""
 
@@ -126,28 +125,28 @@ msgstr ""
 #~ msgid "Checking tag…"
 #~ msgstr ""
 
-#: src/Panel.tsx:298
+#: src/Panel.tsx:300
 msgid "Tag unlinked"
 msgstr ""
 
-#: src/Panel.tsx:299
+#: src/Panel.tsx:301
 msgid "NFC tag has been successfully unlinked."
 msgstr ""
 
-#: src/Panel.tsx:305
+#: src/Panel.tsx:307
 msgid "Unlink failed"
 msgstr ""
 
-#: src/Panel.tsx:306
+#: src/Panel.tsx:308
 msgid "Could not remove the NFC tag. Try again."
 msgstr ""
 
-#: src/Panel.tsx:382
-#: src/Panel.tsx:619
+#: src/Panel.tsx:384
+#: src/Panel.tsx:654
 msgid "Tag linked"
 msgstr ""
 
-#: src/Panel.tsx:398
+#: src/Panel.tsx:400
 msgid "Link failed"
 msgstr ""
 
@@ -155,125 +154,97 @@ msgstr ""
 #~ msgid "Loading NFC config…"
 #~ msgstr ""
 
-#: src/Panel.tsx:525
+#: src/Panel.tsx:530
 msgid "Stock added"
 msgstr ""
 
-#: src/Panel.tsx:525
+#: src/Panel.tsx:530
 msgid "Stock removed"
 msgstr ""
 
-#: src/Panel.tsx:540
+#: src/Panel.tsx:545
 msgid "Stock update failed"
 msgstr ""
 
-#: src/Panel.tsx:541
+#: src/Panel.tsx:546
 msgid "Could not update stock."
 msgstr ""
 
-#: src/Panel.tsx:554
+#: src/Panel.tsx:559
 msgid "Loading NFC config..."
 msgstr ""
 
-#: src/Panel.tsx:561
+#: src/Panel.tsx:566
 msgid "Config error"
 msgstr ""
 
-#: src/Panel.tsx:562
+#: src/Panel.tsx:567
 msgid "Could not load NFC plugin settings."
 msgstr ""
 
-#: src/Panel.tsx:603
+#: src/Panel.tsx:577
+msgid "Go to this tube?"
+msgstr ""
+
+#: src/Panel.tsx:583
+msgid "Open the stock item page for lot"
+msgstr ""
+
+#: src/Panel.tsx:588
+msgid "Cancel"
+msgstr ""
+
+#: src/Panel.tsx:598
+msgid "Go to stock item"
+msgstr ""
+
+#: src/Panel.tsx:638
 msgid "NFC Tag"
 msgstr ""
 
-#: src/Panel.tsx:612
+#: src/Panel.tsx:647
 msgid "Checking tag..."
 msgstr ""
 
-#: src/Panel.tsx:625
+#: src/Panel.tsx:660
 msgid "UID:"
 msgstr ""
 
-#: src/Panel.tsx:633
+#: src/Panel.tsx:668
 msgid "Linked by"
 msgstr ""
 
-#: src/Panel.tsx:648
+#: src/Panel.tsx:683
 msgid "Unlink tag"
 msgstr ""
 
-#: src/Panel.tsx:654
+#: src/Panel.tsx:689
 msgid "No NFC tag linked to this part."
 msgstr ""
 
-#: src/Panel.tsx:670
+#: src/Panel.tsx:705
 msgid "Link NFC Tag"
 msgstr ""
 
-#: src/Panel.tsx:682
+#: src/Panel.tsx:717
 msgid "Scan to Find"
 msgstr ""
 
-#: src/Panel.tsx:700
+#: src/Panel.tsx:735
 msgid "Scan Tag"
 msgstr ""
 
-#: src/Panel.tsx:705
+#: src/Panel.tsx:740
 msgid "Tube found"
-msgstr ""
-
-#: src/Panel.tsx:734
-msgid "Scanned tube"
-msgstr ""
-
-#: src/Panel.tsx:737
-msgid "No lot"
 msgstr ""
 
 #: src/Panel.tsx:740
 #~ msgid "Loading stock..."
 #~ msgstr ""
 
-#: src/Panel.tsx:741
-msgid "Quantity:"
-msgstr ""
-
-#: src/Panel.tsx:742
-msgid "Expiry:"
-msgstr ""
-
-#: src/Panel.tsx:743
-msgid "Location:"
-msgstr ""
-
-#: src/Panel.tsx:744
-msgid "Concentration:"
-msgstr ""
-
 #: src/Panel.tsx:744
 #~ msgid "No stock items available to adjust."
 #~ msgstr ""
-
-#: src/Panel.tsx:745
-msgid "Measured pH:"
-msgstr ""
-
-#: src/Panel.tsx:746
-msgid "Purity:"
-msgstr ""
-
-#: src/Panel.tsx:747
-msgid "Manufacturer:"
-msgstr ""
-
-#: src/Panel.tsx:748
-msgid "Received:"
-msgstr ""
-
-#: src/Panel.tsx:749
-msgid "Opened:"
-msgstr ""
 
 #: src/Panel.tsx:751
 #~ msgid "Stock item"
@@ -282,14 +253,6 @@ msgstr ""
 #: src/Panel.tsx:752
 #~ msgid "Choose location"
 #~ msgstr ""
-
-#: src/Panel.tsx:754
-msgid "Quantity to add / remove"
-msgstr ""
-
-#: src/Panel.tsx:755
-msgid "Available:"
-msgstr ""
 
 #: src/Panel.tsx:757
 #~ msgid "No location"
@@ -303,34 +266,90 @@ msgstr ""
 #~ msgid "Available in this item:"
 #~ msgstr ""
 
-#: src/Panel.tsx:771
-msgid "Add"
+#: src/Panel.tsx:781
+msgid "Scanned tube"
 msgstr ""
 
-#: src/Panel.tsx:782
-msgid "Remove"
+#: src/Panel.tsx:784
+msgid "No lot"
+msgstr ""
+
+#: src/Panel.tsx:788
+msgid "Quantity:"
+msgstr ""
+
+#: src/Panel.tsx:789
+msgid "Expiry:"
+msgstr ""
+
+#: src/Panel.tsx:790
+msgid "Location:"
 msgstr ""
 
 #: src/Panel.tsx:791
+msgid "Concentration:"
+msgstr ""
+
+#: src/Panel.tsx:792
+msgid "Measured pH:"
+msgstr ""
+
+#: src/Panel.tsx:793
+msgid "Purity:"
+msgstr ""
+
+#: src/Panel.tsx:794
+msgid "Manufacturer:"
+msgstr ""
+
+#: src/Panel.tsx:795
+msgid "Received:"
+msgstr ""
+
+#: src/Panel.tsx:796
+msgid "Opened:"
+msgstr ""
+
+#: src/Panel.tsx:801
+msgid "Quantity to add / remove"
+msgstr ""
+
+#: src/Panel.tsx:802
+msgid "Available:"
+msgstr ""
+
+#: src/Panel.tsx:818
+msgid "Add"
+msgstr ""
+
+#: src/Panel.tsx:829
+msgid "Remove"
+msgstr ""
+
+#: src/Panel.tsx:838
 msgid "Other tubes of this product"
 msgstr ""
 
-#: src/Panel.tsx:804
+#: src/Panel.tsx:853
 msgid "Lot"
 msgstr ""
 
-#: src/Panel.tsx:804
+#: src/Panel.tsx:853
 msgid "Qty"
 msgstr ""
 
-#: src/Panel.tsx:805
+#: src/Panel.tsx:854
 msgid "Exp"
 msgstr ""
 
-#: src/Panel.tsx:820
+#: src/Panel.tsx:869
 msgid "Go to product"
 msgstr ""
 
-#: src/Panel.tsx:839
+#: src/Panel.tsx:877
+msgid "No tube linked to"
+msgstr ""
+
+#: src/Panel.tsx:888
 msgid "Browse parts to link"
 msgstr ""
