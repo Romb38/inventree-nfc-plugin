@@ -42,10 +42,10 @@ interface NfcConfig {
   sound_enabled: boolean;
 }
 
-interface TagByPartResponse {
+interface TagByStockResponse {
   found: boolean;
   uid?: string;
-  part_id?: number;
+  stock_item_id?: number;
   linked_at?: string;
   linked_by?: string | null;
 }
@@ -233,8 +233,8 @@ function getScanErrorMessage(code: string): string {
  * https://docs.inventree.org/en/latest/plugins/mixins/ui/#plugin-context
  */
 function NFCPanel({ context }: { context: InvenTreePluginContext }) {
-  const partId = useMemo(
-    () => (context.model === ModelType.part ? (context.id ?? null) : null),
+  const stockItemId = useMemo(
+    () => (context.model === ModelType.stockitem ? (context.id ?? null) : null),
     [context.model, context.id]
   );
 
@@ -270,21 +270,21 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
   const readerReady = !!health?.agent_reachable && !!health?.reader_connected;
   const canScan = !!config && readerReady;
 
-  // Tag linked to this part
-  const tagByPartQuery = useQuery<TagByPartResponse>(
+  // Tag linked to this stock item (tube)
+  const tagByStockQuery = useQuery<TagByStockResponse>(
     {
-      queryKey: ['nfc-tag-by-part', partId],
-      enabled: !!partId,
+      queryKey: ['nfc-tag-by-stock', stockItemId],
+      enabled: !!stockItemId,
       queryFn: () =>
         context.api
-          .get(`/plugin/nfc/tag/by-part/${partId}/`)
+          .get(`/plugin/nfc/stock-item-tag/${stockItemId}/`)
           .then((r) => r.data),
       staleTime: 60_000
     },
     context.queryClient
   );
 
-  const linkedTag = tagByPartQuery.data?.found ? tagByPartQuery.data : null;
+  const linkedTag = tagByStockQuery.data?.found ? tagByStockQuery.data : null;
 
   // Unlink
   const unlinkMutation = useMutation(
@@ -292,9 +292,8 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
       mutationFn: (uid: string) =>
         context.api.delete(`/plugin/nfc/link/${uid}/`),
       onSuccess: () => {
-        // Refresh the tag status for this part
         context.queryClient.invalidateQueries({
-          queryKey: ['nfc-tag-by-part', partId]
+          queryKey: ['nfc-tag-by-stock', stockItemId]
         });
         notifications.show({
           title: t`Tag unlinked`,
@@ -313,54 +312,11 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
     context.queryClient
   );
 
-  /**const [linkScanning, setLinkScanning] = useState(false);
-  const startLinkScan = useCallback(async () => {
-    if (!config || !partId) return;
-    setLinkScanning(true);
-
-    const uid = await pollForTag(
-      config.agent_base_url,
-      config.scan_timeout_seconds,
-      new AbortController().signal
-    );
-
-    if (!uid) {
-      notifications.show({
-        title: t`No tag detected`,
-        message: t`Scan timed out or no reader found.`,
-        color: 'yellow'
-      });
-      setLinkScanning(false);
-      return;
-    }
-
-    try {
-      await context.api.post('/plugin/nfc/link/', { uid, part_id: partId });
-      context.queryClient.invalidateQueries({
-        queryKey: ['nfc-tag-by-part', partId]
-      });
-      notifications.show({
-        title: t`Tag linked`,
-        message: `${uid} → part #${partId}`,
-        color: 'green'
-      });
-    } catch (err: any) {
-      notifications.show({
-        title: t`Link failed`,
-        message:
-          err?.response?.data?.error ?? t`Could not link tag. Try again.`,
-        color: 'red'
-      });
-    }
-
-    setLinkScanning(false);
-  }, [config, partId, context.api, context.queryClient]);**/
-
   // Link Scan
   const [linkScanning, setLinkScanning] = useState(false);
 
   const startLinkScan = useCallback(async () => {
-    if (!config || !partId || linkScanning) return;
+    if (!config || !stockItemId || linkScanning) return;
 
     setLinkScanning(true);
 
@@ -372,17 +328,17 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
         config.scan_timeout_seconds
       );
 
-      await context.api.post('/plugin/nfc/link/', { uid, part_id: partId });
+      await context.api.post('/plugin/nfc/link/', { uid, stock_item_id: stockItemId });
 
       context.queryClient.invalidateQueries({
-        queryKey: ['nfc-tag-by-part', partId]
+        queryKey: ['nfc-tag-by-stock', stockItemId]
       });
 
       playSound(config.sound_enabled, 'success');
 
       notifications.show({
         title: t`Tag linked`,
-        message: `${uid} → part #${partId}`,
+        message: `${uid} → tube #${stockItemId}`,
         color: 'green'
       });
     } catch (err: any) {
@@ -407,7 +363,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
     } finally {
       setLinkScanning(false);
     }
-  }, [config, partId, linkScanning, context.api, context.queryClient]);
+  }, [config, stockItemId, linkScanning, context.api, context.queryClient]);
 
   /**const [findScanning, setFindScanning] = useState(false);
   const [findResult, setFindResult] = useState<TagLookupResult | null>(null);
@@ -630,8 +586,8 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
       </Group>
 
       <Accordion defaultValue='scan'>
-        {/* Link / Unlink — staff + part page only */}
-        {partId && isStaff && (
+        {/* Link / Unlink — staff + stock item page only */}
+        {stockItemId && isStaff && (
           <Accordion.Item value='link'>
             <Accordion.Control>
               <Title c={context.theme.primaryColor} order={4}>
@@ -640,7 +596,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
             </Accordion.Control>
             <Accordion.Panel>
               <Stack gap='sm'>
-                {tagByPartQuery.isLoading ? (
+                {tagByStockQuery.isLoading ? (
                   <Group>
                     <Loader size='xs' />
                     <Text size='sm' c='dimmed'>
@@ -686,7 +642,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                 ) : (
                   <>
                     <Text size='sm' c='dimmed'>
-                      {t`No NFC tag linked to this part.`}
+                      {t`No NFC tag linked to this tube.`}
                     </Text>
 
                     <Button

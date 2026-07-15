@@ -79,11 +79,12 @@ class NFC(
     def setup_urls(self):
         """Configure custom URL endpoints for this plugin."""
         from django.urls import path
-        from .views import NFCConfigView, NFCLinkView, NFCStockView, NFCStockItemsView, NFCTagView, NFCTagByPartView, NFCUnlinkView
+        from .views import NFCConfigView, NFCLinkView, NFCStockView, NFCStockItemsView, NFCTagView, NFCTagByPartView, NFCTagByStockItemView, NFCUnlinkView
 
         return [
             path("config/", NFCConfigView.as_view(), name="nfc-config"),
             path("tag/by-part/<int:part_id>/", NFCTagByPartView.as_view(), name="nfc-tag-by-part"),
+            path("stock-item-tag/<int:stock_item_id>/", NFCTagByStockItemView.as_view(), name="nfc-tag-by-stock-item"),
             path("stock-items/<str:uid>/", NFCStockItemsView.as_view(), name="nfc-stock-items"),
             path("tag/<str:uid>/", NFCTagView.as_view(), name="nfc-tag-detail"),
             path("link/", NFCLinkView.as_view(), name="nfc-link"),
@@ -160,4 +161,3 @@ class NFC(
                 "source": self.plugin_static_file("Spotlight.js:NFCSpotlightAction"),
             }
         ]
-        

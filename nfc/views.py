@@ -305,6 +305,33 @@ class NFCStockView(APIView):
             "new_stock": float(stock_item.quantity),
         })
 
+class NFCTagByStockItemView(APIView):
+    """
+    GET /stock-item-tag/<stock_item_id>/
+    Returns the NFC tag linked to a specific stock item (tube), or not found.
+    Used by the panel on a stock item page to show link/unlink state.
+    """
+
+    permission_classes: ClassVar = [permissions.IsAuthenticated]
+
+    def get(self, request, stock_item_id, *args, **kwargs):
+        from .models import NFCTagLink
+
+        try:
+            link = NFCTagLink.objects.select_related("linked_by").get(
+                stock_item_id=stock_item_id, active=True
+            )
+            return Response({
+                "found": True,
+                "uid": link.uid,
+                "stock_item_id": stock_item_id,
+                "linked_at": link.linked_at,
+                "linked_by": link.linked_by.username if link.linked_by else None,
+            })
+        except NFCTagLink.DoesNotExist:
+            return Response({"found": False, "stock_item_id": stock_item_id})
+
+
 class NFCTagByPartView(APIView):
     """
     GET /tag/by-part/<part_id>/
@@ -395,4 +422,3 @@ class NFCStockItemsView(APIView):
             "part": _serialize_part(part),
             "stock_items": [_serialize_tube(si) for si in items],
         })
-        
