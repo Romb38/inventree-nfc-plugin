@@ -13,7 +13,6 @@ import {
   Group,
   Loader,
   NumberInput,
-  Select,
   Stack,
   Text,
   Title
@@ -55,28 +54,35 @@ interface ScanResult {
   error?: string;
 }
 
-interface StockItemOption {
+interface Tube {
   id: number;
   quantity: number;
-  location: string | null;
   batch: string | null;
+  expiry_date: string | null;
+  location: string | null;
+  status_label: string | null;
+  concentration: string | null;
+  measured_ph: string | null;
+  received_date: string | null;
+  opened_date: string | null;
+  purity: string | null;
+  manufacturer: string | null;
 }
 
-interface StockItemsResponse {
-  found: boolean;
-  uid?: string;
-  part_id?: number;
-  part_name?: string;
-  stock_items?: StockItemOption[];
+interface PartInfo {
+  part_id: number;
+  part_name: string;
+  part_description: string;
+  total_stock: number;
+  parameters: Record<string, string>;
 }
 
 interface TagLookupResult {
   found: boolean;
   uid?: string;
-  part_id?: number;
-  part_name?: string;
-  part_description?: string;
-  total_stock?: number;
+  part?: PartInfo;
+  scanned_tube?: Tube;
+  sibling_tubes?: Tube[];
   part_url?: string;
 }
 
@@ -465,8 +471,6 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
       const data: TagLookupResult = res.data;
       setFindResult(data);
       if (data.found) {
-        setAdjustUid(uid);
-        setSelectedStockId(null);
         setAdjustQty(1);
       }
 
@@ -494,50 +498,23 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
     }
   }, [config, findScanning, context.api, context.navigate]);
 
-  // Stock adjust (Path A): tag names the part, user picks a stock item
-  const [adjustUid, setAdjustUid] = useState<string | null>(null);
-  const [selectedStockId, setSelectedStockId] = useState<string | null>(null);
+  // Stock adjust: the scanned tube is the target (no picker).
   const [adjustQty, setAdjustQty] = useState<number | string>(1);
 
-  const stockItemsQuery = useQuery<StockItemsResponse>(
-    {
-      queryKey: ['nfc-stock-items', adjustUid],
-      enabled: !!adjustUid,
-      queryFn: () =>
-        context.api
-          .get(`/plugin/nfc/stock-items/${adjustUid}/`)
-          .then((r) => r.data),
-      staleTime: 0
-    },
-    context.queryClient
-  );
-
-  const stockItems = stockItemsQuery.data?.stock_items ?? [];
-
-  // Auto-select when the part has exactly one stock item
-  const effectiveStockId = useMemo(() => {
-    if (selectedStockId) return selectedStockId;
-    if (stockItems.length === 1) return String(stockItems[0].id);
-    return null;
-  }, [selectedStockId, stockItems]);
-
-  const selectedAvailable = useMemo(() => {
-    const si = stockItems.find((s) => String(s.id) === effectiveStockId);
-    return si ? si.quantity : null;
-  }, [stockItems, effectiveStockId]);
+  const scannedTube = findResult?.scanned_tube ?? null;
 
   const stockMutation = useMutation(
     {
       mutationFn: (vars: { action: 'add' | 'remove' }) => {
         const qty = typeof adjustQty === 'string' ? parseFloat(adjustQty) : adjustQty;
-        if (!effectiveStockId || !qty || qty <= 0) {
+        if (!findResult?.uid || !scannedTube || !qty || qty <= 0) {
           return Promise.reject({
-            response: { data: { error: 'Select a stock item and a quantity greater than 0.' } }
+            response: { data: { error: 'Scan a tube and enter a quantity greater than 0.' } }
           });
         }
         return context.api.post('/plugin/nfc/stock/', {
-          uid: adjustUid,
-          stock_item_id: effectiveStockId,
+          uid: findResult.uid,
+          stock_item_id: scannedTube.id,
           quantity: qty,
           action: vars.action
         });
@@ -549,8 +526,13 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
           message: `${res.data.part_name}: ${fmtQty(res.data.new_stock)}`,
           color: 'green'
         });
-        stockItemsQuery.refetch();
-        if (findResult) setFindResult({ ...findResult, total_stock: res.data.new_stock });
+        // Update the scanned tube's quantity in place
+        if (findResult && scannedTube) {
+          setFindResult({
+            ...findResult,
+            scanned_tube: { ...scannedTube, quantity: res.data.new_stock }
+          });
+        }
       },
       onError: (err: any) => {
         playSound(config!.sound_enabled, 'error');
@@ -719,84 +701,113 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
               </Button>
 
               {findResult &&
-                (findResult.found ? (
-                  <Alert color='teal' title={t`Part found`}>
-                    <Stack gap={4}>
-                      <Text fw={600}>{findResult.part_name}</Text>
+                (findResult.found && findResult.scanned_tube && findResult.part ? (
+                  <Alert color='teal' title={t`Tube found`}>
+                    <Stack gap='sm'>
+                      {/* ZONE 1 — product (shared info) */}
+                      <div>
+                        <Text fw={600}>{findResult.part.part_name}</Text>
+                        {findResult.part.part_description && (
+                          <Text size='sm' c='dimmed'>
+                            {findResult.part.part_description}
+                          </Text>
+                        )}
+                        {Object.entries(findResult.part.parameters || {}).map(
+                          ([k, v]) => (
+                            <Text key={k} size='xs' c='dimmed'>
+                              {k}: {v}
+                            </Text>
+                          )
+                        )}
+                      </div>
 
-                      {findResult.part_description && (
-                        <Text size='sm' c='dimmed'>
-                          {findResult.part_description}
-                        </Text>
-                      )}
-
-                      <Text size='sm'>
-                        {t`Stock:`} {fmtQty(findResult.total_stock)}
-                      </Text>
-
-                      {stockItemsQuery.isLoading ? (
-                        <Group gap='xs'>
-                          <Loader size='xs' />
-                          <Text size='xs' c='dimmed'>{t`Loading stock...`}</Text>
+                      {/* ZONE 2 — the scanned tube (the action target) */}
+                      <Box
+                        style={{
+                          border: '1px solid var(--mantine-color-teal-5)',
+                          borderRadius: 8,
+                          padding: 10
+                        }}
+                      >
+                        <Group justify='space-between' mb={4}>
+                          <Text fw={600} size='sm'>
+                            {t`Scanned tube`}
+                          </Text>
+                          <Badge color='teal' variant='light'>
+                            {findResult.scanned_tube.batch ?? t`No lot`}
+                          </Badge>
                         </Group>
-                      ) : stockItems.length === 0 ? (
-                        <Text size='xs' c='dimmed'>
-                          {t`No stock items available to adjust.`}
-                        </Text>
-                      ) : (
-                        <Stack gap='xs' mt={4}>
-                          {stockItems.length > 1 && (
-                            <Select
-                              size='xs'
-                              label={t`Stock item`}
-                              placeholder={t`Choose location`}
-                              value={effectiveStockId}
-                              onChange={setSelectedStockId}
-                              data={stockItems.map((si) => ({
-                                value: String(si.id),
-                                label: `${si.location ?? t`No location`}${si.batch ? ` · ${si.batch}` : ''} — ${fmtQty(si.quantity)}`
-                              }))}
-                            />
-                          )}
 
-                          <NumberInput
+                        <Text size='xs'>{t`Quantity:`} {fmtQty(findResult.scanned_tube.quantity)}</Text>
+                        <Text size='xs'>{t`Expiry:`} {findResult.scanned_tube.expiry_date ?? '—'}</Text>
+                        <Text size='xs'>{t`Location:`} {findResult.scanned_tube.location ?? '—'}</Text>
+                        <Text size='xs'>{t`Concentration:`} {findResult.scanned_tube.concentration ?? '—'}</Text>
+                        <Text size='xs'>{t`Measured pH:`} {findResult.scanned_tube.measured_ph ?? '—'}</Text>
+                        <Text size='xs'>{t`Purity:`} {findResult.scanned_tube.purity ?? '—'}</Text>
+                        <Text size='xs'>{t`Manufacturer:`} {findResult.scanned_tube.manufacturer ?? '—'}</Text>
+                        <Text size='xs'>{t`Received:`} {findResult.scanned_tube.received_date ?? '—'}</Text>
+                        <Text size='xs'>{t`Opened:`} {findResult.scanned_tube.opened_date ?? '—'}</Text>
+
+                        <NumberInput
+                          size='xs'
+                          mt={8}
+                          label={t`Quantity to add / remove`}
+                          description={`${t`Available:`} ${fmtQty(findResult.scanned_tube.quantity)}`}
+                          min={1}
+                          value={adjustQty}
+                          onChange={setAdjustQty}
+                        />
+
+                        <Group grow gap='xs' mt={6}>
+                          <Button
                             size='xs'
-                            label={t`Quantity`}
-                            description={
-                              selectedAvailable !== null
-                                ? `${t`Available in this item:`} ${fmtQty(selectedAvailable)}`
-                                : undefined
-                            }
-                            min={1}
-                            value={adjustQty}
-                            onChange={setAdjustQty}
-                          />
+                            color='green'
+                            variant='filled'
+                            leftSection={<IconPlus size={14} />}
+                            disabled={stockMutation.isPending}
+                            loading={stockMutation.isPending}
+                            onClick={() => stockMutation.mutate({ action: 'add' })}
+                          >
+                            {t`Add`}
+                          </Button>
+                          <Button
+                            size='xs'
+                            color='red'
+                            variant='filled'
+                            leftSection={<IconMinus size={14} />}
+                            disabled={stockMutation.isPending}
+                            loading={stockMutation.isPending}
+                            onClick={() => stockMutation.mutate({ action: 'remove' })}
+                          >
+                            {t`Remove`}
+                          </Button>
+                        </Group>
+                      </Box>
 
-                          <Group grow gap='xs'>
-                            <Button
-                              size='xs'
-                              color='green'
-                              variant='filled'
-                              leftSection={<IconPlus size={14} />}
-                              disabled={!effectiveStockId || stockMutation.isPending}
-                              loading={stockMutation.isPending}
-                              onClick={() => stockMutation.mutate({ action: 'add' })}
-                            >
-                              {t`Add`}
-                            </Button>
-                            <Button
-                              size='xs'
-                              color='red'
-                              variant='filled'
-                              leftSection={<IconMinus size={14} />}
-                              disabled={!effectiveStockId || stockMutation.isPending}
-                              loading={stockMutation.isPending}
-                              onClick={() => stockMutation.mutate({ action: 'remove' })}
-                            >
-                              {t`Remove`}
-                            </Button>
-                          </Group>
-                        </Stack>
+                      {/* ZONE 3 — sibling tubes (read-only) */}
+                      {findResult.sibling_tubes && findResult.sibling_tubes.length > 0 && (
+                        <div>
+                          <Text size='xs' fw={600} c='dimmed' mb={4}>
+                            {t`Other tubes of this product`}
+                          </Text>
+                          <Stack gap={4}>
+                            {findResult.sibling_tubes.map((s) => (
+                              <Box
+                                key={s.id}
+                                style={{
+                                  border: '1px solid var(--mantine-color-gray-4)',
+                                  borderRadius: 6,
+                                  padding: 6
+                                }}
+                              >
+                                <Text size='xs'>
+                                  {t`Lot`} {s.batch ?? '—'} · {t`Qty`} {fmtQty(s.quantity)} ·{' '}
+                                  {t`Exp`} {s.expiry_date ?? '—'}
+                                </Text>
+                              </Box>
+                            ))}
+                          </Stack>
+                        </div>
                       )}
 
                       <Button
@@ -806,7 +817,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                         mt={4}
                         onClick={() => context.navigate(findResult.part_url!)}
                       >
-                        {t`Go to part`}
+                        {t`Go to product`}
                       </Button>
                     </Stack>
                   </Alert>

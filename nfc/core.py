@@ -102,8 +102,8 @@ class NFC(
 
         panels = []
 
-        # Only display this panel for the 'part' target
-        if context.get("target_model") in ["part", "stocklocation", "partcategory"]:
+        # Display on part, stock item, stock location, and category pages
+        if context.get("target_model") in ["part", "stockitem", "stocklocation", "partcategory"]:
             panels.append({
                 "key": "nfc-panel",
                 "title": "NFC Scanner",
@@ -160,3 +160,4 @@ class NFC(
                 "source": self.plugin_static_file("Spotlight.js:NFCSpotlightAction"),
             }
         ]
+        
