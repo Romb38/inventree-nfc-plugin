@@ -433,8 +433,8 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
       }
 
       playSound(config.sound_enabled, data.found ? 'success' : 'error');
-      if (data.found && config.auto_redirect && data.part_url) {
-        context.navigate(data.part_url);
+      if (data.found && config.auto_redirect && data.scanned_tube) {
+        context.navigate(`/stock/item/${data.scanned_tube.id}/`);
       }
     } catch (err: any) {
       if (err?.code === 'timeout' || err?.code === 'client_timeout') {
