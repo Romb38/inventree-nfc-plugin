@@ -98,13 +98,24 @@ class NFC(
     # Custom UI panels
     def get_ui_panels(self, request, context: dict, **kwargs):
         """
-        Show the NFC panel on Part detail and Stock Location pages
+        Show the NFC panel on Part detail, Stock Item, Stock Location,
+        and Stock Item list pages.
         """
 
         panels = []
 
-        # Display on part, stock item, stock location, and category pages
-        if context.get("target_model") in ["part", "stockitem", "stocklocation", "partcategory"]:
+        # Panels render only where InvenTree calls this hook. Confirmed via the
+        # plugin panel API: the Parts index calls it with 'partcategory', and
+        # detail pages call it with their model. The STOCK INDEX page does NOT
+        # call this hook at all, so the panel cannot appear in the Stock sidebar.
+        allowed = [
+            "part",            # part detail page
+            "stockitem",       # single tube (stock item) detail page
+            "stocklocation",   # stock location detail page
+            "partcategory",    # parts index page (Parts sidebar entry)
+        ]
+
+        if context.get("target_model") in allowed:
             panels.append({
                 "key": "nfc-panel",
                 "title": "NFC Scanner",
@@ -161,3 +172,4 @@ class NFC(
                 "source": self.plugin_static_file("Spotlight.js:NFCSpotlightAction"),
             }
         ]
+        

@@ -13,347 +13,255 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/Dashboard.tsx:103
-#~ msgid "No tag detected"
-#~ msgstr ""
-
-#: src/Dashboard.tsx:104
-#~ msgid "Scan timed out or no reader found."
-#~ msgstr ""
-
-#: src/Dashboard.tsx:115
-#~ msgid "Plugin:"
-#~ msgstr ""
-
-#: src/Dashboard.tsx:116
-#~ msgid "User:"
-#~ msgstr ""
-
-#: src/Dashboard.tsx:120
-#~ msgid "Lookup failed"
-#~ msgstr ""
-
-#: src/Dashboard.tsx:121
-#~ msgid "Could not check this tag."
-#~ msgstr ""
-
-#: src/Dashboard.tsx:140
-#~ msgid "Waiting for tag…"
-#~ msgstr ""
-
 #: src/Dashboard.tsx:218
 #: src/Panel.tsx:447
 msgid "Scan failed"
-msgstr ""
+msgstr "Scansione fallita"
 
 #: src/Dashboard.tsx:251
 #: src/Panel.tsx:579
 msgid "Checking reader..."
-msgstr ""
+msgstr "Verifica del lettore..."
 
 #: src/Dashboard.tsx:253
 #: src/Panel.tsx:581
 msgid "Agent not reachable"
-msgstr ""
+msgstr "Agente non raggiungibile"
 
 #: src/Dashboard.tsx:255
 #: src/Panel.tsx:583
 msgid "Reader connected"
-msgstr ""
+msgstr "Lettore connesso"
 
 #: src/Dashboard.tsx:256
 #: src/Panel.tsx:584
 msgid "Reader not available"
-msgstr ""
+msgstr "Lettore non disponibile"
 
 #: src/Dashboard.tsx:269
 #: src/Panel.tsx:661
 #: src/Panel.tsx:691
 msgid "Waiting for tag..."
-msgstr ""
+msgstr "In attesa del tag..."
 
 #: src/Dashboard.tsx:269
 msgid "Scan NFC Tag"
-msgstr ""
+msgstr "Scansiona tag NFC"
 
 #: src/Dashboard.tsx:299
 msgid "Part found"
-msgstr ""
+msgstr "Prodotto trovato"
 
 #: src/Dashboard.tsx:310
 msgid "Stock:"
-msgstr ""
+msgstr "Giacenza:"
 
 #: src/Dashboard.tsx:319
 msgid "Go to part"
-msgstr ""
+msgstr "Vai al prodotto"
 
 #: src/Dashboard.tsx:324
 #: src/Panel.tsx:830
 msgid "Unknown tag"
-msgstr ""
+msgstr "Tag sconosciuto"
 
 #: src/Dashboard.tsx:326
 msgid "No part linked to"
-msgstr ""
-
-#: src/Panel.tsx:96
-#~ msgid "Translated Text"
-#~ msgstr "Testo tradotto"
-
-#: src/Panel.tsx:97
-#~ msgid "Translated text, provided by custom code!"
-#~ msgstr "Testo tradotto, fornito tramite codice personalizzato!"
-
-#: src/Panel.tsx:98
-#~ msgid "Translations are loaded automatically."
-#~ msgstr "Le traduzioni vengono caricate automaticamente."
-
-#: src/Panel.tsx:99
-#~ msgid "Fallback locale is used if no translation is available"
-#~ msgstr ""
-
-#: src/Panel.tsx:201
-#~ msgid "Could not link tag. Try again."
-#~ msgstr ""
-
-#: src/Panel.tsx:245
-#~ msgid "Could not check this tag. Try again."
-#~ msgstr ""
-
-#: src/Panel.tsx:286
-#~ msgid "Checking tag…"
-#~ msgstr ""
+msgstr "Nessun prodotto collegato a"
 
 #: src/Panel.tsx:299
 msgid "Tag unlinked"
-msgstr ""
+msgstr "Tag scollegato"
 
 #: src/Panel.tsx:300
 msgid "NFC tag has been successfully unlinked."
-msgstr ""
+msgstr "Il tag NFC è stato scollegato con successo."
 
 #: src/Panel.tsx:306
 msgid "Unlink failed"
-msgstr ""
+msgstr "Scollegamento fallito"
 
 #: src/Panel.tsx:307
 msgid "Could not remove the NFC tag. Try again."
-msgstr ""
+msgstr "Impossibile rimuovere il tag NFC. Riprova."
 
 #: src/Panel.tsx:340
 #: src/Panel.tsx:610
 msgid "Tag linked"
-msgstr ""
+msgstr "Tag collegato"
 
 #: src/Panel.tsx:356
 msgid "Link failed"
-msgstr ""
-
-#: src/Panel.tsx:430
-#~ msgid "Loading NFC config…"
-#~ msgstr ""
+msgstr "Collegamento fallito"
 
 #: src/Panel.tsx:486
 msgid "Stock added"
-msgstr ""
+msgstr "Giacenza aggiunta"
 
 #: src/Panel.tsx:486
 msgid "Stock removed"
-msgstr ""
+msgstr "Giacenza rimossa"
 
 #: src/Panel.tsx:501
 msgid "Stock update failed"
-msgstr ""
+msgstr "Aggiornamento della giacenza fallito"
 
 #: src/Panel.tsx:502
 msgid "Could not update stock."
-msgstr ""
+msgstr "Impossibile aggiornare la giacenza."
 
 #: src/Panel.tsx:515
 msgid "Loading NFC config..."
-msgstr ""
+msgstr "Caricamento della configurazione NFC..."
 
 #: src/Panel.tsx:522
 msgid "Config error"
-msgstr ""
+msgstr "Errore di configurazione"
 
 #: src/Panel.tsx:523
 msgid "Could not load NFC plugin settings."
-msgstr ""
+msgstr "Impossibile caricare le impostazioni del plugin NFC."
 
 #: src/Panel.tsx:533
 msgid "Go to this tube?"
-msgstr ""
+msgstr "Andare a questa provetta?"
 
 #: src/Panel.tsx:539
 msgid "Open the stock item page for lot"
-msgstr ""
+msgstr "Apri la pagina dell'articolo per il lotto"
 
 #: src/Panel.tsx:544
 msgid "Cancel"
-msgstr ""
+msgstr "Annulla"
 
 #: src/Panel.tsx:554
 msgid "Go to stock item"
-msgstr ""
+msgstr "Vai all'articolo"
 
 #: src/Panel.tsx:594
 msgid "NFC Tag"
-msgstr ""
+msgstr "Tag NFC"
 
 #: src/Panel.tsx:603
 msgid "Checking tag..."
-msgstr ""
+msgstr "Verifica del tag..."
 
 #: src/Panel.tsx:616
 msgid "UID:"
-msgstr ""
+msgstr "UID:"
 
 #: src/Panel.tsx:624
 msgid "Linked by"
-msgstr ""
+msgstr "Collegato da"
 
 #: src/Panel.tsx:639
 msgid "Unlink tag"
-msgstr ""
+msgstr "Scollega tag"
 
 #: src/Panel.tsx:645
 msgid "No NFC tag linked to this tube."
-msgstr ""
+msgstr "Nessun tag NFC collegato a questa provetta."
 
 #: src/Panel.tsx:661
 msgid "Link NFC Tag"
-msgstr ""
+msgstr "Collega tag NFC"
 
 #: src/Panel.tsx:673
 msgid "Scan to Find"
-msgstr ""
-
-#: src/Panel.tsx:689
-#~ msgid "No NFC tag linked to this part."
-#~ msgstr ""
+msgstr "Scansiona per trovare"
 
 #: src/Panel.tsx:691
 msgid "Scan Tag"
-msgstr ""
+msgstr "Scansiona tag"
 
 #: src/Panel.tsx:696
 msgid "Tube found"
-msgstr ""
+msgstr "Provetta trovata"
 
 #: src/Panel.tsx:737
 msgid "Scanned tube"
-msgstr ""
+msgstr "Provetta scansionata"
 
 #: src/Panel.tsx:740
 msgid "No lot"
-msgstr ""
-
-#: src/Panel.tsx:740
-#~ msgid "Loading stock..."
-#~ msgstr ""
+msgstr "Nessun lotto"
 
 #: src/Panel.tsx:744
 msgid "Quantity:"
-msgstr ""
-
-#: src/Panel.tsx:744
-#~ msgid "No stock items available to adjust."
-#~ msgstr ""
+msgstr "Quantità:"
 
 #: src/Panel.tsx:745
 msgid "Expiry:"
-msgstr ""
+msgstr "Scadenza:"
 
 #: src/Panel.tsx:746
 msgid "Location:"
-msgstr ""
+msgstr "Posizione:"
 
 #: src/Panel.tsx:747
 msgid "Concentration:"
-msgstr ""
+msgstr "Concentrazione:"
 
 #: src/Panel.tsx:748
 msgid "Measured pH:"
-msgstr ""
+msgstr "pH misurato:"
 
 #: src/Panel.tsx:749
 msgid "Purity:"
-msgstr ""
+msgstr "Purezza:"
 
 #: src/Panel.tsx:750
 msgid "Manufacturer:"
-msgstr ""
+msgstr "Produttore:"
 
 #: src/Panel.tsx:751
 msgid "Received:"
-msgstr ""
-
-#: src/Panel.tsx:751
-#~ msgid "Stock item"
-#~ msgstr ""
+msgstr "Ricevuto il:"
 
 #: src/Panel.tsx:752
 msgid "Opened:"
-msgstr ""
-
-#: src/Panel.tsx:752
-#~ msgid "Choose location"
-#~ msgstr ""
+msgstr "Aperto il:"
 
 #: src/Panel.tsx:757
 msgid "Quantity to add / remove"
-msgstr ""
-
-#: src/Panel.tsx:757
-#~ msgid "No location"
-#~ msgstr ""
+msgstr "Quantità da aggiungere / rimuovere"
 
 #: src/Panel.tsx:758
 msgid "Available:"
-msgstr ""
-
-#: src/Panel.tsx:764
-#~ msgid "Quantity"
-#~ msgstr ""
-
-#: src/Panel.tsx:767
-#~ msgid "Available in this item:"
-#~ msgstr ""
+msgstr "Disponibile:"
 
 #: src/Panel.tsx:774
 msgid "Add"
-msgstr ""
+msgstr "Aggiungi"
 
 #: src/Panel.tsx:785
 msgid "Remove"
-msgstr ""
+msgstr "Rimuovi"
 
 #: src/Panel.tsx:794
 msgid "Other tubes of this product"
-msgstr ""
+msgstr "Altre provette di questo prodotto"
 
 #: src/Panel.tsx:809
 msgid "Lot"
-msgstr ""
+msgstr "Lotto"
 
 #: src/Panel.tsx:809
 msgid "Qty"
-msgstr ""
+msgstr "Qtà"
 
 #: src/Panel.tsx:810
 msgid "Exp"
-msgstr ""
+msgstr "Scad."
 
 #: src/Panel.tsx:825
 msgid "Go to product"
-msgstr ""
+msgstr "Vai al prodotto"
 
 #: src/Panel.tsx:833
 msgid "No tube linked to"
-msgstr ""
+msgstr "Nessuna provetta collegata a"
 
 #: src/Panel.tsx:844
-msgid "Browse parts to link"
-msgstr ""
+msgid "Browse stock items to link"
+msgstr "Sfoglia i prodotti da collegare"

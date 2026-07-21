@@ -432,7 +432,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
         setAdjustQty(1);
       }
 
-      playSound(config.sound_enabled, 'success');
+      playSound(config.sound_enabled, data.found ? 'success' : 'error');
       if (data.found && config.auto_redirect && data.part_url) {
         context.navigate(data.part_url);
       }
@@ -839,9 +839,9 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                           size='xs'
                           variant='light'
                           color='yellow'
-                          onClick={() => context.navigate('/part/')}
+                          onClick={() => context.navigate('/stock/')}
                         >
-                          {t`Browse parts to link`}
+                          {t`Browse stock items to link`}
                         </Button>
                       )}
                     </Stack>

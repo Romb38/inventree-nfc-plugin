@@ -355,5 +355,5 @@ msgid "No tube linked to"
 msgstr ""
 
 #: src/Panel.tsx:844
-msgid "Browse parts to link"
+msgid "Browse stock items to link"
 msgstr ""

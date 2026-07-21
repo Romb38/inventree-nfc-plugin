@@ -6,25 +6,21 @@ import { useEffect, useState } from 'react';
 // is automatically included in the bundle. Adding a new language = zero code changes.
 const catalogs = import.meta.glob('./locales/*/messages.ts', { eager: true });
 
-function getCatalog(locale: string): any {
-  // Try exact match first (handles zh_Hans, zh_Hant, pseudo-LOCALE etc.)
-  const exact = catalogs[`./locales/${locale}/messages.ts`] as any;
-  if (exact) return exact.default ?? exact.messages ?? exact;
-
-  // Try base language (en-us → en, fr-CA → fr)
+function resolveLocaleKey(locale: string): string | null {
+  // Return the catalog key that actually exists for this locale.
+  if (catalogs[`./locales/${locale}/messages.ts`]) return locale;
   const base = locale.split(/[-_]/)[0];
-  const fallback = catalogs[`./locales/${base}/messages.ts`] as any;
-  if (fallback) return fallback.default ?? fallback.messages ?? fallback;
-
-  // Last resort: English
-  const en = catalogs[`./locales/en/messages.ts`] as any;
-  return en?.default ?? en?.messages ?? en ?? {};
+  if (catalogs[`./locales/${base}/messages.ts`]) return base;
+  return null;
 }
 
-let catalogLoaded = false;
+function getCatalog(localeKey: string): any {
+  const mod = catalogs[`./locales/${localeKey}/messages.ts`] as any;
+  return mod?.messages ?? mod?.default ?? mod ?? {};
+}
 
 export function LocalizedComponent({
-  locale: _locale,
+  locale,
   children,
   context
 }: {
@@ -32,25 +28,30 @@ export function LocalizedComponent({
   children: React.ReactNode;
   context: InvenTreePluginContext;
 }) {
-  const [ready, setReady] = useState(catalogLoaded);
+  const [loadedFor, setLoadedFor] = useState<string | null>(null);
 
   useEffect(() => {
-    if (catalogLoaded) return;
+    if (!locale) return;
 
-    const activeLocale = context.i18n.locale;
-    const base = activeLocale.split(/[-_]/)[0];
-    const catalog = getCatalog(activeLocale);
+    // Never load the pseudo test locale in production UI.
+    const requested = locale === 'pseudo-LOCALE' ? 'en' : locale;
 
-    context.i18n.load(base, {
-      ...((context.i18n as any)._messages?.[base] ?? {}),
+    const key = resolveLocaleKey(requested) ?? 'en';
+    const catalog = getCatalog(key);
+
+    // Load our catalog under the requested locale key, then activate it so
+    // the plugin renders in that language regardless of i18n's prior state.
+    context.i18n.load(requested, {
+      ...((context.i18n as any)._messages?.[requested] ?? {}),
       ...catalog
     });
-    context.i18n.activate(base);
-    catalogLoaded = true;
-    setReady(true);
-  }, [context.i18n]);
+    context.i18n.activate(requested);
 
-  if (!ready) return null;
+    setLoadedFor(locale);
+  }, [locale, context.i18n]);
+
+  // Re-block briefly on each language change so stale text is never shown.
+  if (loadedFor !== locale) return null;
 
   return <I18nProvider i18n={context.i18n}>{children}</I18nProvider>;
 }
