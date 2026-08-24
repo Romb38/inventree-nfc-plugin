@@ -8,6 +8,7 @@ import {
   Badge,
   Box,
   Button,
+  Divider,
   Group,
   Loader,
   SimpleGrid,
@@ -18,6 +19,7 @@ import { notifications } from '@mantine/notifications';
 import { IconWifi } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
+import { CreateTabs } from './CreateForms';
 import { playSound } from './sound';
 
 interface NfcConfig {
@@ -268,14 +270,14 @@ function NFCDashboardItem({ context }: { context: InvenTreePluginContext }) {
       >
         {scanning ? t`Waiting for tag...` : t`Scan NFC Tag`}
       </Button>
-      
+
       <Button
         color='gray'
         onClick={() => {
           // Test 1: check if the path is right
           const url = '/static/plugins/nfc/sounds/click.mp3';
           console.log('Trying to play:', url);
-          
+
           // Test 2: try to fetch it first to confirm it exists
           fetch(url)
             .then(r => {
@@ -328,6 +330,9 @@ function NFCDashboardItem({ context }: { context: InvenTreePluginContext }) {
             </Text>
           </Alert>
         ))}
+
+      <Divider my='xs' />
+      <CreateTabs context={context} />
     </SimpleGrid>
   );
 }

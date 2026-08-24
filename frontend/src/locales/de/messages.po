@@ -13,59 +13,330 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/Dashboard.tsx:218
+#: src/CreateForms.tsx:165
+msgid "Product already exists"
+msgstr ""
+
+#: src/CreateForms.tsx:165
+#: src/CreateForms.tsx:654
+msgid "Product created"
+msgstr ""
+
+#: src/CreateForms.tsx:167
+msgid "This product already exists — no new product was created."
+msgstr ""
+
+#: src/CreateForms.tsx:184
+#: src/CreateForms.tsx:490
+msgid "Creation failed"
+msgstr ""
+
+#: src/CreateForms.tsx:185
+msgid "Could not create the product."
+msgstr ""
+
+#: src/CreateForms.tsx:198
+msgid "Confirm new product"
+msgstr ""
+
+#: src/CreateForms.tsx:203
+msgid "Create this product?"
+msgstr ""
+
+#: src/CreateForms.tsx:207
+msgid "Molecule:"
+msgstr ""
+
+#: src/CreateForms.tsx:207
+msgid "Dosage:"
+msgstr ""
+
+#: src/CreateForms.tsx:207
+msgid "Form:"
+msgstr ""
+
+#: src/CreateForms.tsx:208
+msgid "Lab:"
+msgstr ""
+
+#: src/CreateForms.tsx:213
+#: src/Panel.tsx:563
+msgid "Cancel"
+msgstr "Abbrechen"
+
+#: src/CreateForms.tsx:216
+msgid "Confirm"
+msgstr ""
+
+#: src/CreateForms.tsx:222
+#: src/Panel.tsx:909
+msgid "Create product"
+msgstr ""
+
+#: src/CreateForms.tsx:225
+msgid "Molecule (DCI)"
+msgstr ""
+
+#: src/CreateForms.tsx:232
+msgid "Dosage / concentration"
+msgstr ""
+
+#: src/CreateForms.tsx:239
+msgid "Form"
+msgstr ""
+
+#: src/CreateForms.tsx:246
+msgid "Laboratory"
+msgstr ""
+
+#: src/CreateForms.tsx:250
+#~ msgid "Ampoule = whole unit · Poche = mL · Flacon poudre = mg"
+#~ msgstr ""
+
+#: src/CreateForms.tsx:254
+msgid "Product name will be:"
+msgstr ""
+
+#: src/CreateForms.tsx:265
+msgid "Add product"
+msgstr ""
+
+#: src/CreateForms.tsx:393
+msgid "Tag already in use"
+msgstr ""
+
+#: src/CreateForms.tsx:394
+msgid "This tag is linked to another unit. Use a different tag."
+msgstr ""
+
+#: src/CreateForms.tsx:406
+msgid "Tag scanned"
+msgstr ""
+
+#: src/CreateForms.tsx:409
+#: src/Dashboard.tsx:220
 #: src/Panel.tsx:447
 msgid "Scan failed"
 msgstr "Scan fehlgeschlagen"
 
-#: src/Dashboard.tsx:251
-#: src/Panel.tsx:579
+#: src/CreateForms.tsx:410
+msgid "Could not read a tag. Try again."
+msgstr ""
+
+#: src/CreateForms.tsx:424
+msgid "Container required"
+msgstr ""
+
+#: src/CreateForms.tsx:425
+msgid "Choose the container type for this unit."
+msgstr ""
+
+#: src/CreateForms.tsx:434
+msgid "Unit number required"
+msgstr ""
+
+#: src/CreateForms.tsx:435
+msgid "Ampoules need a unit number (serial). Please enter one."
+msgstr ""
+
+#: src/CreateForms.tsx:447
+msgid "This expiry date has already passed. Add this unit anyway?"
+msgstr ""
+
+#: src/CreateForms.tsx:452
+#~ msgid "Expiry date (YYYY-MM-DD)"
+#~ msgstr ""
+
+#: src/CreateForms.tsx:459
+#~ msgid "Reception date (YYYY-MM-DD)"
+#~ msgstr ""
+
+#: src/CreateForms.tsx:477
+msgid "Unit created"
+msgstr ""
+
+#: src/CreateForms.tsx:480
+#~ msgid "Serialized unit → quantity is 1."
+#~ msgstr ""
+
+#: src/CreateForms.tsx:491
+msgid "Could not create the unit."
+msgstr ""
+
+#: src/CreateForms.tsx:501
+msgid "Create unit"
+msgstr ""
+
+#: src/CreateForms.tsx:505
+msgid "Product (part)"
+msgstr ""
+
+#: src/CreateForms.tsx:506
+msgid "Search a product..."
+msgstr ""
+
+#: src/CreateForms.tsx:517
+msgid "➕ Create new part"
+msgstr ""
+
+#: src/CreateForms.tsx:525
+msgid "Choose a product first to enable the unit fields."
+msgstr ""
+
+#: src/CreateForms.tsx:531
+msgid "Container type"
+msgstr ""
+
+#: src/CreateForms.tsx:534
+msgid "Powder → Flacon poudre (mg)"
+msgstr ""
+
+#: src/CreateForms.tsx:536
+msgid "Solution → Ampoule (whole) or Poche (mL)"
+msgstr ""
+
+#: src/CreateForms.tsx:539
+msgid "Choose container"
+msgstr ""
+
+#: src/CreateForms.tsx:550
+msgid "Choose a container to continue."
+msgstr ""
+
+#: src/CreateForms.tsx:555
+msgid "Lot number"
+msgstr ""
+
+#: src/CreateForms.tsx:563
+msgid "Unit number (serial)"
+msgstr ""
+
+#: src/CreateForms.tsx:570
+msgid "Whole unit (ampoule) → quantity is 1."
+msgstr ""
+
+#: src/CreateForms.tsx:575
+#: src/CreateForms.tsx:575
+msgid "Quantity"
+msgstr ""
+
+#: src/CreateForms.tsx:576
+msgid "Remaining amount in"
+msgstr ""
+
+#: src/CreateForms.tsx:586
+msgid "Expiry date"
+msgstr ""
+
+#: src/CreateForms.tsx:593
+msgid "Reception date"
+msgstr ""
+
+#: src/CreateForms.tsx:603
+msgid "NFC tag (optional)"
+msgstr ""
+
+#: src/CreateForms.tsx:604
+msgid "Scan to fill"
+msgstr ""
+
+#: src/CreateForms.tsx:619
+msgid "Scan"
+msgstr ""
+
+#: src/CreateForms.tsx:630
+msgid "Add unit"
+msgstr ""
+
+#: src/CreateForms.tsx:660
+msgid "Add a physical unit for"
+msgstr ""
+
+#: src/CreateForms.tsx:664
+msgid "No, done"
+msgstr ""
+
+#: src/CreateForms.tsx:677
+msgid "Yes, add a unit"
+msgstr ""
+
+#: src/CreateForms.tsx:690
+msgid "Product"
+msgstr ""
+
+#: src/CreateForms.tsx:691
+#: src/Panel.tsx:853
+msgid "Unit"
+msgstr ""
+
+#: src/CreateProductForm.tsx:172
+#~ msgid "Unit added"
+#~ msgstr ""
+
+#: src/CreateProductForm.tsx:176
+#~ msgid "Done."
+#~ msgstr ""
+
+#: src/CreateProductForm.tsx:238
+#~ msgid "Scan or leave empty"
+#~ msgstr ""
+
+#: src/CreateProductForm.tsx:240
+#~ msgid "Add a physical unit now"
+#~ msgstr ""
+
+#: src/CreateProductForm.tsx:321
+#~ msgid "Create product + unit"
+#~ msgstr ""
+
+#: src/Dashboard.tsx:253
+#: src/Panel.tsx:598
 msgid "Checking reader..."
 msgstr "Lesegerät wird geprüft..."
 
-#: src/Dashboard.tsx:253
-#: src/Panel.tsx:581
+#: src/Dashboard.tsx:255
+#: src/Panel.tsx:600
 msgid "Agent not reachable"
 msgstr "Agent nicht erreichbar"
 
-#: src/Dashboard.tsx:255
-#: src/Panel.tsx:583
+#: src/Dashboard.tsx:257
+#: src/Panel.tsx:602
 msgid "Reader connected"
 msgstr "Lesegerät verbunden"
 
-#: src/Dashboard.tsx:256
-#: src/Panel.tsx:584
+#: src/Dashboard.tsx:258
+#: src/Panel.tsx:603
 msgid "Reader not available"
 msgstr "Lesegerät nicht verfügbar"
 
-#: src/Dashboard.tsx:269
-#: src/Panel.tsx:661
-#: src/Panel.tsx:691
+#: src/Dashboard.tsx:271
+#: src/Panel.tsx:680
+#: src/Panel.tsx:710
 msgid "Waiting for tag..."
 msgstr "Warte auf Tag..."
 
-#: src/Dashboard.tsx:269
+#: src/Dashboard.tsx:271
 msgid "Scan NFC Tag"
 msgstr "NFC-Tag scannen"
 
-#: src/Dashboard.tsx:299
+#: src/Dashboard.tsx:301
 msgid "Part found"
 msgstr "Produkt gefunden"
 
-#: src/Dashboard.tsx:310
+#: src/Dashboard.tsx:312
 msgid "Stock:"
 msgstr "Bestand:"
 
-#: src/Dashboard.tsx:319
+#: src/Dashboard.tsx:321
 msgid "Go to part"
 msgstr "Zum Produkt"
 
-#: src/Dashboard.tsx:324
-#: src/Panel.tsx:830
+#: src/Dashboard.tsx:326
+#: src/Panel.tsx:881
 msgid "Unknown tag"
 msgstr "Unbekannter Tag"
 
-#: src/Dashboard.tsx:326
+#: src/Dashboard.tsx:328
 msgid "No part linked to"
 msgstr "Kein Produkt verknüpft mit"
 
@@ -86,7 +357,7 @@ msgid "Could not remove the NFC tag. Try again."
 msgstr "NFC-Tag konnte nicht entfernt werden. Erneut versuchen."
 
 #: src/Panel.tsx:340
-#: src/Panel.tsx:610
+#: src/Panel.tsx:629
 msgid "Tag linked"
 msgstr "Tag verknüpft"
 
@@ -94,174 +365,200 @@ msgstr "Tag verknüpft"
 msgid "Link failed"
 msgstr "Verknüpfen fehlgeschlagen"
 
-#: src/Panel.tsx:486
+#: src/Panel.tsx:502
 msgid "Stock added"
 msgstr "Bestand hinzugefügt"
 
-#: src/Panel.tsx:486
+#: src/Panel.tsx:504
+msgid "Unit marked as used"
+msgstr ""
+
+#: src/Panel.tsx:505
 msgid "Stock removed"
 msgstr "Bestand entfernt"
 
-#: src/Panel.tsx:501
+#: src/Panel.tsx:520
 msgid "Stock update failed"
 msgstr "Bestandsaktualisierung fehlgeschlagen"
 
-#: src/Panel.tsx:502
+#: src/Panel.tsx:521
 msgid "Could not update stock."
 msgstr "Bestand konnte nicht aktualisiert werden."
 
-#: src/Panel.tsx:515
+#: src/Panel.tsx:534
 msgid "Loading NFC config..."
 msgstr "NFC-Konfiguration wird geladen..."
 
-#: src/Panel.tsx:522
+#: src/Panel.tsx:541
 msgid "Config error"
 msgstr "Konfigurationsfehler"
 
-#: src/Panel.tsx:523
+#: src/Panel.tsx:542
 msgid "Could not load NFC plugin settings."
 msgstr "NFC-Plugin-Einstellungen konnten nicht geladen werden."
 
-#: src/Panel.tsx:533
+#: src/Panel.tsx:552
 msgid "Go to this tube?"
 msgstr "Zu diesem Röhrchen gehen?"
 
-#: src/Panel.tsx:539
+#: src/Panel.tsx:558
 msgid "Open the stock item page for lot"
 msgstr "Bestandsseite für Charge öffnen"
 
-#: src/Panel.tsx:544
-msgid "Cancel"
-msgstr "Abbrechen"
-
-#: src/Panel.tsx:554
+#: src/Panel.tsx:573
+#: src/Panel.tsx:876
 msgid "Go to stock item"
 msgstr "Zum Bestandsartikel"
 
-#: src/Panel.tsx:594
+#: src/Panel.tsx:613
 msgid "NFC Tag"
 msgstr "NFC-Tag"
 
-#: src/Panel.tsx:603
+#: src/Panel.tsx:622
 msgid "Checking tag..."
 msgstr "Tag wird geprüft..."
 
-#: src/Panel.tsx:616
+#: src/Panel.tsx:635
 msgid "UID:"
 msgstr "UID:"
 
-#: src/Panel.tsx:624
+#: src/Panel.tsx:643
 msgid "Linked by"
 msgstr "Verknüpft von"
 
-#: src/Panel.tsx:639
+#: src/Panel.tsx:658
 msgid "Unlink tag"
 msgstr "Tag trennen"
 
-#: src/Panel.tsx:645
+#: src/Panel.tsx:664
 msgid "No NFC tag linked to this tube."
 msgstr "Kein NFC-Tag mit diesem Röhrchen verknüpft."
 
-#: src/Panel.tsx:661
+#: src/Panel.tsx:680
 msgid "Link NFC Tag"
 msgstr "NFC-Tag verknüpfen"
 
-#: src/Panel.tsx:673
+#: src/Panel.tsx:692
 msgid "Scan to Find"
 msgstr "Scannen zum Finden"
 
-#: src/Panel.tsx:691
+#: src/Panel.tsx:710
 msgid "Scan Tag"
 msgstr "Tag scannen"
 
-#: src/Panel.tsx:696
+#: src/Panel.tsx:715
 msgid "Tube found"
 msgstr "Röhrchen gefunden"
 
 #: src/Panel.tsx:737
+#~ msgid "Quantity to add / remove"
+#~ msgstr "Menge zum Hinzufügen / Entfernen"
+
+#: src/Panel.tsx:738
+#~ msgid "Available:"
+#~ msgstr "Verfügbar:"
+
+#: src/Panel.tsx:744
 msgid "Scanned tube"
 msgstr "Gescanntes Röhrchen"
 
-#: src/Panel.tsx:740
+#: src/Panel.tsx:745
+#~ msgid "Quantity:"
+#~ msgstr "Menge:"
+
+#: src/Panel.tsx:747
 msgid "No lot"
 msgstr "Keine Charge"
 
-#: src/Panel.tsx:744
-msgid "Quantity:"
-msgstr "Menge:"
+#: src/Panel.tsx:748
+#~ msgid "Concentration:"
+#~ msgstr "Konzentration:"
 
-#: src/Panel.tsx:745
+#: src/Panel.tsx:749
+#~ msgid "Measured pH:"
+#~ msgstr "Gemessener pH:"
+
+#: src/Panel.tsx:750
+#~ msgid "Purity:"
+#~ msgstr "Reinheit:"
+
+#: src/Panel.tsx:751
+#~ msgid "Manufacturer:"
+#~ msgstr "Hersteller:"
+
+#: src/Panel.tsx:752
+msgid "Unit no.:"
+msgstr ""
+
+#: src/Panel.tsx:753
+#~ msgid "Opened:"
+#~ msgstr "Geöffnet am:"
+
+#: src/Panel.tsx:755
+msgid "Lot:"
+msgstr ""
+
+#: src/Panel.tsx:758
 msgid "Expiry:"
 msgstr "Verfall:"
 
-#: src/Panel.tsx:746
-msgid "Location:"
-msgstr "Lagerort:"
-
-#: src/Panel.tsx:747
-msgid "Concentration:"
-msgstr "Konzentration:"
-
-#: src/Panel.tsx:748
-msgid "Measured pH:"
-msgstr "Gemessener pH:"
-
-#: src/Panel.tsx:749
-msgid "Purity:"
-msgstr "Reinheit:"
-
-#: src/Panel.tsx:750
-msgid "Manufacturer:"
-msgstr "Hersteller:"
-
-#: src/Panel.tsx:751
+#: src/Panel.tsx:761
 msgid "Received:"
 msgstr "Erhalten am:"
 
-#: src/Panel.tsx:752
-msgid "Opened:"
-msgstr "Geöffnet am:"
-
-#: src/Panel.tsx:757
-msgid "Quantity to add / remove"
-msgstr "Menge zum Hinzufügen / Entfernen"
-
-#: src/Panel.tsx:758
-msgid "Available:"
-msgstr "Verfügbar:"
+#: src/Panel.tsx:764
+msgid "Location:"
+msgstr "Lagerort:"
 
 #: src/Panel.tsx:774
+#: src/Panel.tsx:775
+msgid "Amount to add / remove"
+msgstr ""
+
+#: src/Panel.tsx:777
+msgid "Remaining:"
+msgstr ""
+
+#: src/Panel.tsx:792
 msgid "Add"
 msgstr "Hinzufügen"
 
-#: src/Panel.tsx:785
+#: src/Panel.tsx:803
 msgid "Remove"
 msgstr "Entfernen"
 
-#: src/Panel.tsx:794
+#: src/Panel.tsx:810
+#~ msgid "Qty"
+#~ msgstr "Menge"
+
+#: src/Panel.tsx:821
+msgid "Mark this unit as used and remove it from stock?"
+msgstr ""
+
+#: src/Panel.tsx:828
+msgid "Mark as used"
+msgstr ""
+
+#: src/Panel.tsx:837
 msgid "Other tubes of this product"
 msgstr "Andere Röhrchen dieses Produkts"
 
-#: src/Panel.tsx:809
+#: src/Panel.tsx:854
 msgid "Lot"
 msgstr "Charge"
 
-#: src/Panel.tsx:809
-msgid "Qty"
-msgstr "Menge"
-
-#: src/Panel.tsx:810
+#: src/Panel.tsx:855
 msgid "Exp"
 msgstr "Verf."
 
-#: src/Panel.tsx:825
-msgid "Go to product"
-msgstr "Zum Produkt"
+#: src/Panel.tsx:858
+#~ msgid "Go to product"
+#~ msgstr "Zum Produkt"
 
-#: src/Panel.tsx:833
+#: src/Panel.tsx:884
 msgid "No tube linked to"
 msgstr "Kein Röhrchen verknüpft mit"
 
-#: src/Panel.tsx:844
+#: src/Panel.tsx:895
 msgid "Browse stock items to link"
 msgstr "Produkte zum Verknüpfen durchsuchen"

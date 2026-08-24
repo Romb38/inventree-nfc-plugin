@@ -15,9 +15,8 @@ from . import PLUGIN_VERSION
 
 log = logging.getLogger(__name__)
 
-class NFC(
-    AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugin
-):
+
+class NFC(AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugin):
     """NFC - custom InvenTree plugin."""
 
     # Plugin metadata
@@ -79,13 +78,49 @@ class NFC(
     def setup_urls(self):
         """Configure custom URL endpoints for this plugin."""
         from django.urls import path
-        from .views import NFCConfigView, NFCLinkView, NFCStockView, NFCStockItemsView, NFCTagView, NFCTagByPartView, NFCTagByStockItemView, NFCUnlinkView
+
+        from .views import (
+            NFCConfigView,
+            NFCCreateItemView,
+            NFCCreateProductView,
+            NFCLinkView,
+            NFCPartInfoView,
+            NFCStockItemsView,
+            NFCStockView,
+            NFCTagByPartView,
+            NFCTagByStockItemView,
+            NFCTagView,
+            NFCUnlinkView,
+        )
 
         return [
             path("config/", NFCConfigView.as_view(), name="nfc-config"),
-            path("tag/by-part/<int:part_id>/", NFCTagByPartView.as_view(), name="nfc-tag-by-part"),
-            path("stock-item-tag/<int:stock_item_id>/", NFCTagByStockItemView.as_view(), name="nfc-tag-by-stock-item"),
-            path("stock-items/<str:uid>/", NFCStockItemsView.as_view(), name="nfc-stock-items"),
+            path(
+                "create-product/",
+                NFCCreateProductView.as_view(),
+                name="nfc-create-product",
+            ),
+            path("create-item/", NFCCreateItemView.as_view(), name="nfc-create-item"),
+            path(
+                "part-info/<int:part_id>/",
+                NFCPartInfoView.as_view(),
+                name="nfc-part-info",
+            ),
+            path(
+                "tag/by-part/<int:part_id>/",
+                NFCTagByPartView.as_view(),
+                name="nfc-tag-by-part",
+            ),
+            path(
+                "stock-item-tag/<int:stock_item_id>/",
+                NFCTagByStockItemView.as_view(),
+                name="nfc-tag-by-stock-item",
+            ),
+            path(
+                "stock-items/<str:uid>/",
+                NFCStockItemsView.as_view(),
+                name="nfc-stock-items",
+            ),
             path("tag/<str:uid>/", NFCTagView.as_view(), name="nfc-tag-detail"),
             path("link/", NFCLinkView.as_view(), name="nfc-link"),
             path("stock/", NFCStockView.as_view(), name="nfc-stock"),
@@ -109,10 +144,10 @@ class NFC(
         # detail pages call it with their model. The STOCK INDEX page does NOT
         # call this hook at all, so the panel cannot appear in the Stock sidebar.
         allowed = [
-            "part",            # part detail page
-            "stockitem",       # single tube (stock item) detail page
-            "stocklocation",   # stock location detail page
-            "partcategory",    # parts index page (Parts sidebar entry)
+            "part",  # part detail page
+            "stockitem",  # single tube (stock item) detail page
+            "stocklocation",  # stock location detail page
+            "partcategory",  # parts index page (Parts sidebar entry)
         ]
 
         if context.get("target_model") in allowed:
@@ -172,4 +207,3 @@ class NFC(
                 "source": self.plugin_static_file("Spotlight.js:NFCSpotlightAction"),
             }
         ]
-        

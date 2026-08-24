@@ -32,7 +32,7 @@ def client_no_reader():
 def test_health_reader_connected(client):
     with patch("agent.agent.readers", return_value = [MagicMock()]):
         res = client.get("/health")
-    
+
     assert res.status_code == 200
     data = res.get_json()
     assert data["status"] == "ok"
@@ -41,7 +41,7 @@ def test_health_reader_connected(client):
 def test_health_no_reader(client):
     with patch("agent.agent.readers", return_value = []):
         res = client.get("/health")
-    
+
     assert res.status_code == 200
     data = res.get_json()
     assert data["reader_connected"] is False

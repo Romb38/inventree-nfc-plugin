@@ -4,6 +4,7 @@ Exposes 2 endpoints:
   GET  /health      → is the reader connected?
   POST /scan/once   → wait for a tag, return its UID
 """
+
 from __future__ import annotations
 
 import logging
@@ -11,7 +12,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
-from flask import Flask, jsonify,request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from smartcard.CardMonitoring import CardMonitor, CardObserver
 from smartcard.Exceptions import CardConnectionException, NoCardException
@@ -26,24 +27,25 @@ log = logging.getLogger("nfc-agent")
 
 # The APDU command that tells an NFC tag: "give me your UID"
 GET_UID = [0xFF, 0xCA, 0x00, 0x00, 0x00]
-SW_OK   = (0x90, 0x00)  # status word = success
+SW_OK = (0x90, 0x00)  # status word = success
 
 DEFAUTL_SCAN_TIMEOUT = 30.0
-MIN_SCAN_TIMEOUT     = 1.0
-MAX_SCAN_TIMEOUT     = 120.0
+MIN_SCAN_TIMEOUT = 1.0
+MAX_SCAN_TIMEOUT = 120.0
 
-_scan_lock =  threading.Lock()
+_scan_lock = threading.Lock()
 
-############################### Thread-safe UID buffer ############################### 
+############################### Thread-safe UID buffer ###############################
 # When agent.py receives POST /scan/once, the HTTP request thread calls
 # _state.take() which BLOCKS. Meanwhile, the PC/SC background thread
 # (NFCObserver) detects the tag, reads the UID, and calls _state.set(uid)
 # which UNBLOCKS the waiting HTTP thread. Clean, no polling.
 
+
 @dataclass
 class TagState:
-    _lock:  threading.Lock  = field(default_factory=threading.Lock,  repr=False)
-    _uid:   Optional[str]   = field(default=None,                    repr=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _uid: Optional[str] = field(default=None, repr=False)
     _event: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def clear(self) -> None:
@@ -74,6 +76,7 @@ _state = TagState()
 ############################### PC/SC card observer ###############################
 # pyscard's CardMonitor runs a background thread that calls update()
 # every time a card is inserted or removed.
+
 
 class NFCObserver(CardObserver):
     def update(self, observable, actions):
@@ -115,15 +118,17 @@ app = Flask(__name__)
 # CORS(app, origins=["http://localhost:*", "http://127.0.0.1:*"])
 CORS(app)
 
+
 @app.get("/health")
 def health():
-    current_readers =  readers()
+    current_readers = readers()
 
     return jsonify({
         "status": "ok",
         "reader_connected": bool(current_readers),
         "readers": [str(r) for r in current_readers],
     }), 200
+
 
 @app.post("/scan/once")
 def scan_once():
@@ -160,6 +165,7 @@ def scan_once():
 
 if __name__ == "__main__":
     from waitress import serve
+
     monitor = CardMonitor()
     monitor.addObserver(NFCObserver())
     log.info("Agent ready on http://127.0.0.1:8765")
