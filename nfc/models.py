@@ -32,6 +32,17 @@ class NFCTagLink(models.Model):
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
+        related_name="nfc_links_created",
+    )
+
+    # Recorded when the link is deactivated (unlinked), for history.
+    unlinked_at = models.DateTimeField(null=True, blank=True)
+    unlinked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="nfc_links_removed",
     )
 
     class Meta:

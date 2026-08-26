@@ -41,18 +41,9 @@ class NFC(AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugi
     # Plugin settings (from SettingsMixin)
     # Ref: https://docs.inventree.org/en/latest/plugins/mixins/settings/
     SETTINGS: ClassVar[dict] = {
-        "SCAN_TIMEOUT_SECONDS": {
-            "name": "Scan timeout (seconds)",
-            "description": "How long the UI waits for a scan session before timing out.",
-            "validator": int,
-            "default": 30,
-        },
-        "AGENT_BASE_URL": {
-            "name": "Local NFC agent URL",
-            "description": "Base URL of the workstation NFC agent.",
-            "validator": str,
-            "default": "http://127.0.0.1:8765",
-        },
+        # NOTE: The agent URL and scan timeout are configured PER WORKSTATION
+        # from the plugin's Settings page (stored in the browser), because they
+        # are machine-specific. They are intentionally not global settings.
         "SOUND_ENABLED": {
             "name": "Enable sound effects",
             "description": "Play sound effects for scan and unlink actions.",

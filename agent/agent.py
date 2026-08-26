@@ -45,7 +45,7 @@ _scan_lock = threading.Lock()
 @dataclass
 class TagState:
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
-    _uid: Optional[str] = field(default=None, repr=False)
+    _uid: str | None = field(default=None, repr=False)
     _event: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def clear(self) -> None:
@@ -58,7 +58,7 @@ class TagState:
             self._uid = uid
             self._event.set()
 
-    def take(self, timeout: float = DEFAUTL_SCAN_TIMEOUT) -> Optional[str]:
+    def take(self, timeout: float = DEFAUTL_SCAN_TIMEOUT) -> str | None:
         """Block until a tag arrives or timeout expires."""
         fired = self._event.wait(timeout=timeout)
         if not fired:
@@ -88,7 +88,7 @@ class NFCObserver(CardObserver):
                 _state.set(uid)
 
 
-def _read_uid(card) -> Optional[str]:
+def _read_uid(card) -> str | None:
     try:
         card.connection = card.createConnection()
         card.connection.connect()
@@ -107,8 +107,8 @@ def _read_uid(card) -> Optional[str]:
     finally:
         try:
             card.connection.disconnect()
-        except Exception:
-            pass
+        except Exception as exc:
+            logging.debug("Card disconnect failed: %s", exc)
 
 
 ############################### Flask App ###############################

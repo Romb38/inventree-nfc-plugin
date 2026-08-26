@@ -21,6 +21,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { CreateTabs } from './CreateForms';
 import { playSound } from './sound';
+import { getEffectiveConfig } from './agentConfig';
 
 interface NfcConfig {
   agent_base_url: string;
@@ -160,7 +161,7 @@ function NFCDashboardItem({ context }: { context: InvenTreePluginContext }) {
   const configQuery = useQuery<NfcConfig>(
     {
       queryKey: ['nfc-config'],
-      queryFn: () => context.api.get('/plugin/nfc/config/').then((r) => r.data),
+      queryFn: () => getEffectiveConfig(context.api),
       staleTime: 0,
       refetchOnWindowFocus: true,
     },

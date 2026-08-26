@@ -1,7 +1,9 @@
 import type { InvenTreePluginContext } from '@inventreedb/ui';
 import { t } from '@lingui/core/macro';
 import {
+  ActionIcon,
   Alert,
+  Badge,
   Box,
   Button,
   Group,
@@ -18,16 +20,11 @@ import { notifications } from '@mantine/notifications';
 import { IconCheck, IconWifi } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { playSound } from './sound';
+import { getEffectiveConfig } from './agentConfig';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
-
-interface NfcConfig {
-  agent_base_url: string;
-  scan_timeout_seconds: number;
-  sound_enabled: boolean;
-}
 
 interface ScanResult {
   uid?: string;
@@ -69,6 +66,70 @@ async function scanOnce(agentBaseUrl: string, timeoutSeconds: number): Promise<s
 }
 
 // Reader status dot (color only, no text).
+// Month + year picker. Value is stored as 'YYYY-MM' (or '' when incomplete).
+// Month is a fixed 1–12 dropdown (can't be invalid); year is an editable
+// number. The user can click to choose or type the year directly.
+function MonthYearPicker({
+  label,
+  value,
+  onChange
+}: {
+  label: string;
+  value: string; // 'YYYY-MM' or ''
+  onChange: (v: string) => void;
+}) {
+  const [yearStr, monthStr] = value && value.includes('-')
+    ? value.split('-')
+    : ['', ''];
+
+  const months = [
+    { value: '01', label: t`01 - January` },
+    { value: '02', label: t`02 - February` },
+    { value: '03', label: t`03 - March` },
+    { value: '04', label: t`04 - April` },
+    { value: '05', label: t`05 - May` },
+    { value: '06', label: t`06 - June` },
+    { value: '07', label: t`07 - July` },
+    { value: '08', label: t`08 - August` },
+    { value: '09', label: t`09 - September` },
+    { value: '10', label: t`10 - October` },
+    { value: '11', label: t`11 - November` },
+    { value: '12', label: t`12 - December` }
+  ];
+
+  function emit(y: string, m: string) {
+    if (y && m) onChange(`${y}-${m}`);
+    else onChange('');
+  }
+
+  return (
+    <div>
+      <Text size='sm' fw={500} mb={2}>{label}</Text>
+      <Text size='xs' c='dimmed' mb={4}>{t`mm-yyyy`}</Text>
+      <Group gap='xs' grow>
+        <Select
+          placeholder={t`Month`}
+          data={months}
+          value={monthStr || null}
+          searchable
+          onChange={(m) => emit(yearStr, m || '')}
+        />
+        <NumberInput
+          placeholder={t`Year`}
+          min={2000}
+          max={2100}
+          value={yearStr ? Number(yearStr) : ''}
+          hideControls
+          onChange={(y) => {
+            const yy = y ? String(y) : '';
+            emit(yy, monthStr);
+          }}
+        />
+      </Group>
+    </div>
+  );
+}
+
 function ReaderDot({ connected }: { connected: boolean | null }) {
   return (
     <Box
@@ -101,8 +162,8 @@ function useReaderStatus(context: InvenTreePluginContext) {
       try {
         // Fetch config only once; the agent URL doesn't change.
         if (!agentUrl) {
-          const r = await context.api.get('/plugin/nfc/config/');
-          agentUrl = r.data.agent_base_url;
+          const cfg = await getEffectiveConfig(context.api);
+          agentUrl = cfg.agent_base_url;
         }
         const ok = await getReaderConnected(agentUrl!);
         if (active) setConnected(ok);
@@ -278,30 +339,28 @@ export function CreateItemForm({
   onRequestCreatePart
 }: {
   context: InvenTreePluginContext;
-  // If provided, this part is preselected (used after creating a part).
   presetPartId?: number | null;
-  // Called when the user chooses "Create new part" in the selector.
   onRequestCreatePart?: () => void;
 }) {
   const [parts, setParts] = useState<PartOption[]>([]);
   const [partId, setPartId] = useState<string | null>(
     presetPartId ? String(presetPartId) : null
   );
+  const [locations, setLocations] = useState<PartOption[]>([]);
+  const [locationId, setLocationId] = useState<string | null>(null);
   const [batch, setBatch] = useState('');
-  const [serial, setSerial] = useState('');
-  const [expiry, setExpiry] = useState('');
+  const [expiry, setExpiry] = useState('');   // stored as YYYY-MM (month input)
   const [received, setReceived] = useState('');
   const [quantity, setQuantity] = useState<number | string>(1);
-  const [uid, setUid] = useState('');
+
+  // Multiple tags -> multiple identical units (one per tag).
+  const [tags, setTags] = useState<string[]>([]);
   const [scanning, setScanning] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // The selected part's form ("Solution" | "Poudre"), and the container the
-  // user chooses for THIS unit (constrained by the form).
   const [partForm, setPartForm] = useState<string | null>(null);
   const [container, setContainer] = useState<string | null>(null);
 
-  // Container options allowed for the part's form.
   const containerOptions =
     partForm === 'Poudre'
       ? ['Flacon poudre']
@@ -309,44 +368,58 @@ export function CreateItemForm({
         ? ['Ampoule', 'Poche']
         : ['Ampoule', 'Poche', 'Flacon poudre'];
 
-  // Behaviour + unit derived from the CHOSEN container.
   const behaviour: 'whole' | 'quantity' =
     container === 'Poche' || container === 'Flacon poudre' ? 'quantity' : 'whole';
   const unitLabel = container === 'Poche' ? 'mL' : container === 'Flacon poudre' ? 'mg' : null;
 
   const readerConnected = useReaderStatus(context);
 
-  // Load parts for the selector.
+  // Load parts.
   useEffect(() => {
     let active = true;
     context.api
       .get('/api/part/?limit=500&ordering=name')
       .then((r) => {
         const results = r.data?.results ?? r.data ?? [];
-        if (active) {
-          setParts(
-            results.map((p: any) => ({ value: String(p.pk), label: p.name }))
-          );
-        }
+        if (active)
+          setParts(results.map((p: any) => ({ value: String(p.pk), label: p.name })));
       })
-      .catch(() => {
-        if (active) setParts([]);
-      });
+      .catch(() => active && setParts([]));
     return () => {
       active = false;
     };
   }, [context.api]);
 
-  // Keep preset in sync if it changes (e.g. after creating a part).
+  // Load stock locations.
+  useEffect(() => {
+    let active = true;
+    context.api
+      .get('/api/stock/location/?limit=500&ordering=name')
+      .then((r) => {
+        const results = r.data?.results ?? r.data ?? [];
+        if (active)
+          setLocations(
+            results.map((l: any) => ({
+              value: String(l.pk),
+              label: l.pathstring || l.name
+            }))
+          );
+      })
+      .catch(() => active && setLocations([]));
+    return () => {
+      active = false;
+    };
+  }, [context.api]);
+
   useEffect(() => {
     if (presetPartId) setPartId(String(presetPartId));
   }, [presetPartId]);
 
   const CREATE_NEW = '__create_new__';
   const hasPart = !!partId && partId !== CREATE_NEW;
-  const ready = hasPart && !!container;
+  const ready = hasPart && !!container && !!locationId;
 
-  // When a part is chosen, fetch its form and default the container choice.
+  // Fetch the part's form when chosen.
   useEffect(() => {
     if (!hasPart) {
       setPartForm(null);
@@ -360,9 +433,8 @@ export function CreateItemForm({
         if (!active) return;
         const f = r.data?.form ?? null;
         setPartForm(f);
-        // Preselect the only valid container when the form dictates it.
         if (f === 'Poudre') setContainer('Flacon poudre');
-        else setContainer(null); // Solution → let the user pick Ampoule/Poche
+        else setContainer(null);
       })
       .catch(() => {
         if (active) {
@@ -375,35 +447,44 @@ export function CreateItemForm({
     };
   }, [partId, hasPart, context.api]);
 
+  // Scan a tag and add it to the list (checking it isn't already linked).
   async function handleScan() {
     if (scanning) return;
     setScanning(true);
     try {
-      const r = await context.api.get('/plugin/nfc/config/');
-      const cfg: NfcConfig = r.data;
+      const cfg = await getEffectiveConfig(context.api);
       playSound(cfg.sound_enabled, 'click');
       const scanned = await scanOnce(cfg.agent_base_url, cfg.scan_timeout_seconds);
 
-      // Check if this tag is already linked to a unit, and warn right away.
+      // Already in the current list?
+      if (tags.includes(scanned)) {
+        playSound(cfg.sound_enabled, 'error');
+        notifications.show({
+          title: t`Already added`,
+          message: t`That tag is already in the list.`,
+          color: 'orange'
+        });
+        return;
+      }
+      // Already linked to another unit?
       try {
         const check = await context.api.get(`/plugin/nfc/tag/${scanned}/`);
         if (check.data?.found) {
           playSound(cfg.sound_enabled, 'error');
           notifications.show({
             title: t`Tag already in use`,
-            message: t`This tag is linked to another unit. Use a different tag.`,
+            message: t`This tag is linked to another unit.`,
             color: 'red'
           });
-          setUid('');
           return;
         }
       } catch {
-        // lookup failed — fall through and let submit-time validation catch it
+        /* lookup failed — allow, backend will validate */
       }
 
-      setUid(scanned);
+      setTags((prev) => [...prev, scanned]);
       playSound(cfg.sound_enabled, 'success');
-      notifications.show({ title: t`Tag scanned`, message: scanned, color: 'green' });
+      notifications.show({ title: t`Tag added`, message: scanned, color: 'green' });
     } catch {
       notifications.show({
         title: t`Scan failed`,
@@ -415,80 +496,77 @@ export function CreateItemForm({
     }
   }
 
+  function removeTag(uid: string) {
+    setTags((prev) => prev.filter((u) => u !== uid));
+  }
+
   async function handleSubmit() {
-    if (!hasPart || submitting) return;
+    if (!ready || submitting) return;
+    if (!container) return;
 
-    // A container must be chosen for the unit.
-    if (!container) {
-      notifications.show({
-        title: t`Container required`,
-        message: t`Choose the container type for this unit.`,
-        color: 'red'
-      });
-      return;
-    }
-
-    // Ampoules (whole units) must have a unit number (serial).
-    if (behaviour === 'whole' && !serial.trim()) {
-      notifications.show({
-        title: t`Unit number required`,
-        message: t`Ampoules need a unit number (serial). Please enter one.`,
-        color: 'red'
-      });
-      return;
-    }
-
-    // Warn if the expiry date has already passed (may be legitimate for old
-    // stock, so confirm rather than block).
+    // Past-expiry warning (expiry is YYYY-MM; compare to current month).
     if (expiry.trim()) {
-      const today = new Date().toISOString().slice(0, 10);
-      if (expiry.trim() < today) {
-        const ok = window.confirm(
-          t`This expiry date has already passed. Add this unit anyway?`
-        );
-        if (!ok) return;
+      const nowMonth = new Date().toISOString().slice(0, 7);
+      if (expiry.trim() < nowMonth) {
+        if (!window.confirm(t`This expiry date has already passed. Continue anyway?`))
+          return;
       }
     }
 
     setSubmitting(true);
     try {
+      // Dates are month inputs (YYYY-MM); store as first day of month.
+      // Accept either 'YYYY-MM' (native month input) or 'MM-YYYY' (typed) and
+      // normalize to the first day of that month for the backend date field.
+      const toDate = (v: string): string | null => {
+        const s = v.trim();
+        if (!s) return null;
+        let year: string, month: string;
+        if (/^\d{4}-\d{2}$/.test(s)) {
+          [year, month] = s.split('-');
+        } else if (/^\d{2}-\d{4}$/.test(s)) {
+          [month, year] = s.split('-');
+        } else {
+          return null; // unrecognized -> treat as empty
+        }
+        return `${year}-${month}-01`;
+      };
+      const expiryDate = toDate(expiry);
+      const receivedDate = toDate(received);
+
       const body: Record<string, any> = {
         part_id: Number(partId),
         container_type: container,
+        location_id: Number(locationId),
         batch: batch.trim(),
-        expiry_date: expiry.trim() || null,
-        received_date: received.trim() || null
+        expiry_date: expiryDate,
+        received_date: receivedDate,
+        quantity:
+          behaviour === 'whole'
+            ? 1
+            : typeof quantity === 'string'
+              ? parseFloat(quantity) || 0
+              : quantity,
+        uids: tags // may be empty -> creates a single untagged unit
       };
-      if (behaviour === 'whole') {
-        // Ampoule: one physical unit identified by serial, quantity forced to 1.
-        body.serial = serial.trim();
-        body.quantity = 1;
-      } else {
-        // Poche / flacon: quantity-tracked (mL / mg), no serial.
-        body.serial = '';
-        body.quantity =
-          typeof quantity === 'string' ? parseFloat(quantity) || 0 : quantity;
-      }
-      if (uid.trim()) body.uid = uid.trim();
 
       const res = await context.api.post('/plugin/nfc/create-item/', body);
-      const data = res.data;
+      const n = res.data?.created_count ?? 0;
       notifications.show({
-        title: t`Unit created`,
-        message: data.part_name ?? '',
+        title: n > 1 ? t`Units created` : t`Unit created`,
+        message: `${res.data.part_name ?? ''} — ${n}`,
         color: 'green'
       });
-      // Reset unit fields, keep the part selected for quick repeat entry.
+      // Reset per-unit fields, keep the part selected.
       setBatch('');
-      setSerial('');
       setExpiry('');
       setReceived('');
-      setUid('');
       setQuantity(1);
+      setTags([]);
     } catch (err: any) {
       notifications.show({
         title: t`Creation failed`,
-        message: err?.response?.data?.error ?? t`Could not create the unit.`,
+        message: err?.response?.data?.error ?? t`Could not create the unit(s).`,
         color: 'red'
       });
     } finally {
@@ -500,7 +578,6 @@ export function CreateItemForm({
     <Stack gap='sm'>
       <Text fw={600}>{t`Create unit`}</Text>
 
-      {/* Part selector first — the rest is disabled until a part is chosen */}
       <Select
         label={t`Product (part)`}
         placeholder={t`Search a product...`}
@@ -513,10 +590,7 @@ export function CreateItemForm({
           }
           setPartId(v);
         }}
-        data={[
-          { value: CREATE_NEW, label: t`➕ Create new part` },
-          ...parts
-        ]}
+        data={[{ value: CREATE_NEW, label: t`➕ Create new part` }, ...parts]}
         required
       />
 
@@ -545,93 +619,114 @@ export function CreateItemForm({
         />
       )}
 
-      {hasPart && !container && (
-        <Text size='xs' c='dimmed'>
-          {t`Choose a container to continue.`}
-        </Text>
+      {hasPart && (
+        <Select
+          label={t`Location`}
+          placeholder={t`Choose a location`}
+          searchable
+          data={locations}
+          value={locationId}
+          onChange={setLocationId}
+          disabled={!container}
+          required
+        />
       )}
 
-      <TextInput
-        label={t`Lot number`}
-        value={batch}
-        onChange={(e) => setBatch(e.currentTarget.value)}
-        disabled={!ready}
-      />
-      {behaviour === 'whole' ? (
+      {ready && (
         <>
           <TextInput
-            label={t`Unit number (serial)`}
-            value={serial}
-            onChange={(e) => setSerial(e.currentTarget.value)}
-            disabled={!ready}
-            required
+            label={t`Lot number`}
+            value={batch}
+            onChange={(e) => setBatch(e.currentTarget.value)}
           />
-          <Text size='xs' c='dimmed'>
-            {t`Whole unit (ampoule) → quantity is 1.`}
-          </Text>
+          {behaviour === 'whole' ? (
+            <Text size='xs' c='dimmed'>{t`Whole unit (ampoule) → quantity is 1.`}</Text>
+          ) : (
+            <NumberInput
+              label={unitLabel ? `${t`Quantity`} (${unitLabel})` : t`Quantity`}
+              min={0}
+              value={quantity}
+              onChange={setQuantity}
+            />
+          )}
+          <MonthYearPicker
+            label={t`Expiry`}
+            value={expiry}
+            onChange={setExpiry}
+          />
+          <MonthYearPicker
+            label={t`Reception`}
+            value={received}
+            onChange={setReceived}
+          />
+
+          {/* Multiple tags — one unit will be created per tag */}
+          <div>
+            <Group align='end' gap='xs'>
+              <Text size='sm' style={{ flex: 1 }}>
+                {t`NFC tags`} ({tags.length})
+              </Text>
+              <ReaderDot connected={readerConnected} />
+              <Button
+                variant='light'
+                leftSection={scanning ? <Loader size={14} /> : <IconWifi size={16} />}
+                loading={scanning}
+                disabled={!readerConnected}
+                onClick={handleScan}
+              >
+                {t`Add tag`}
+              </Button>
+            </Group>
+            {tags.length > 0 && (
+              <Group gap={6} mt={6}>
+                {tags.map((u) => (
+                  <Badge
+                    key={u}
+                    variant='light'
+                    rightSection={
+                      <ActionIcon
+                        size='xs'
+                        variant='transparent'
+                        onClick={() => removeTag(u)}
+                        aria-label={t`Remove`}
+                      >
+                        ×
+                      </ActionIcon>
+                    }
+                  >
+                    {u}
+                  </Badge>
+                ))}
+              </Group>
+            )}
+            <Text size='xs' c='dimmed' mt={4}>
+              {tags.length > 0
+                ? t`One identical unit will be created per tag.`
+                : t`No tag: a single unit will be created without a tag.`}
+            </Text>
+          </div>
         </>
-      ) : (
-        <NumberInput
-          label={unitLabel ? `${t`Quantity`} (${unitLabel})` : t`Quantity`}
-          description={unitLabel ? `${t`Remaining amount in`} ${unitLabel}` : undefined}
-          min={0}
-          value={quantity}
-          onChange={setQuantity}
-          disabled={!ready}
-        />
       )}
 
-      <TextInput
-        type='date'
-        label={t`Expiry date`}
-        value={expiry}
-        onChange={(e) => setExpiry(e.currentTarget.value)}
-        disabled={!ready}
-      />
-      <TextInput
-        type='date'
-        label={t`Reception date`}
-        value={received}
-        onChange={(e) => setReceived(e.currentTarget.value)}
-        disabled={!ready}
-      />
-
-      {/* Optional tag — scan only */}
-      <Group align='end' gap='xs'>
-        <TextInput
-          style={{ flex: 1 }}
-          label={t`NFC tag (optional)`}
-          placeholder={t`Scan to fill`}
-          value={uid}
-          readOnly
-          tabIndex={-1}
-          disabled={!ready}
-          styles={{ input: { pointerEvents: 'none', cursor: 'default' } }}
-        />
-        <ReaderDot connected={readerConnected} />
-        <Button
-          variant='light'
-          leftSection={scanning ? <Loader size={14} /> : <IconWifi size={16} />}
-          loading={scanning}
-          disabled={!ready || !readerConnected}
-          onClick={handleScan}
-        >
-          {t`Scan`}
-        </Button>
-      </Group>
+      {hasPart && !ready && (
+        <Text size='xs' c='dimmed'>
+          {t`Choose a container and a location to continue.`}
+        </Text>
+      )}
 
       <Button
         mt='xs'
         leftSection={<IconCheck size={16} />}
-        disabled={!ready || (behaviour === 'whole' && !serial.trim())}
+        disabled={!ready}
         loading={submitting}
         onClick={handleSubmit}
       >
-        {t`Add unit`}
+        {tags.length > 1 ? `${t`Create`} ${tags.length} ${t`units`}` : t`Add unit`}
       </Button>
     </Stack>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // CREATE TABS — container holding both forms with cross-tab handoff.

@@ -81,7 +81,7 @@ def _serialize_tube(stock_item):
 
     return {
         "id": stock_item.pk,
-        "serial": stock_item.serial or None,
+        "serial": stock_item.serial or meta.get("used_serial") or None,
         "batch": stock_item.batch or None,
         "expiry_date": stock_item.expiry_date.isoformat()
         if stock_item.expiry_date
@@ -89,6 +89,8 @@ def _serialize_tube(stock_item):
         "received_date": meta.get("received_date"),
         "location": stock_item.location.name if stock_item.location else None,
         "quantity": float(stock_item.quantity),
+        "out_of_stock": float(stock_item.quantity) <= 0,
+        "used_date": meta.get("used_date"),
         "container_type": container_type,
         "behaviour": behaviour,  # "whole" or "quantity"
         "unit": unit,  # "mL", "mg", or None
@@ -135,8 +137,11 @@ class NFCConfigView(APIView):
 
         plugin = registry.get_plugin("nfc")
         return Response({
-            "agent_base_url": plugin.get_setting("AGENT_BASE_URL"),
-            "scan_timeout_seconds": int(plugin.get_setting("SCAN_TIMEOUT_SECONDS")),
+            # URL + timeout are configured PER WORKSTATION in the browser; these
+            # are only defaults/fallbacks used when a workstation hasn't set its
+            # own. "localhost" is machine-relative, so it's a safe default.
+            "agent_base_url": "http://127.0.0.1:8765",
+            "scan_timeout_seconds": 30,
             "sound_enabled": bool(plugin.get_setting("SOUND_ENABLED")),
             "auto_redirect": bool(plugin.get_setting("AUTO_REDIRECT")),
             "allow_link_from_scan": bool(plugin.get_setting("ALLOW_LINK_FROM_SCAN")),
@@ -239,6 +244,20 @@ class NFCLinkView(APIView):
             active=True,
         )
 
+        # Track the link event (this is a deliberate link from the Tag page,
+        # not the automatic one at unit creation).
+        try:
+            from stock.models import StockItemTracking
+
+            StockItemTracking.objects.create(
+                item=stock_item,
+                user=request.user,
+                notes=f"NFC: tag {uid} linked",
+                deltas={"nfc_link": uid},
+            )
+        except Exception:
+            pass
+
         return Response({
             "success": True,
             "created": True,
@@ -330,9 +349,61 @@ class NFCStockView(APIView):
                         {"error": f"Not enough stock. Available: {available:f}."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
-                _adjust_stock(stock_item, "remove", quantity, request.user, notes)
+                # Removing the entire remaining quantity (e.g. consuming an
+                # ampoule). Serialized items refuse quantity decrements via the
+                # normal stock methods, so set the quantity to 0 directly and
+                # record a tracking entry. This reliably depletes any unit.
+                from decimal import Decimal
+
+                if Decimal(str(quantity)) >= Decimal(str(stock_item.quantity)):
+                    from stock.models import StockItemTracking
+
+                    # A serialized item is pinned to quantity 1 by InvenTree —
+                    # it cannot be saved at 0 while it has a serial. To mark it
+                    # used (out of stock) we clear the serial, then set 0.
+                    if stock_item.serial:
+                        # Preserve the unit number in metadata for history.
+                        meta_serial = stock_item.metadata or {}
+                        meta_serial["used_serial"] = str(stock_item.serial)
+                        stock_item.metadata = meta_serial
+                        stock_item.serial = None
+                    stock_item.quantity = Decimal("0")
+                    stock_item.save()
+                    try:
+                        StockItemTracking.objects.create(
+                            item=stock_item,
+                            user=request.user,
+                            notes=notes or "NFC consume (unit used)",
+                            deltas={"quantity": 0.0, "removed": float(quantity)},
+                        )
+                    except Exception:
+                        pass
+                else:
+                    _adjust_stock(stock_item, "remove", quantity, request.user, notes)
             else:
                 _adjust_stock(stock_item, "add", quantity, request.user, notes)
+
+            stock_item.refresh_from_db()
+
+            # When a unit reaches 0 it becomes "out of stock": keep the record
+            # (never auto-delete) and stamp the used date. The NFC tag link is
+            # intentionally NOT removed — only a manual unlink detaches it.
+            from datetime import date
+
+            meta = stock_item.metadata or {}
+            if float(stock_item.quantity) <= 0:
+                # Prevent InvenTree from deleting the depleted item.
+                if getattr(stock_item, "delete_on_deplete", False):
+                    stock_item.delete_on_deplete = False
+                if not meta.get("used_date"):
+                    meta["used_date"] = date.today().isoformat()
+                    stock_item.metadata = meta
+                stock_item.save()
+            elif meta.get("used_date"):
+                # Stock was added back → it's no longer used/out of stock.
+                meta.pop("used_date", None)
+                stock_item.metadata = meta
+                stock_item.save()
 
         stock_item.refresh_from_db()
 
@@ -342,6 +413,8 @@ class NFCStockView(APIView):
             "action": action,
             "quantity_changed": str(quantity),
             "new_stock": float(stock_item.quantity),
+            "out_of_stock": float(stock_item.quantity) <= 0,
+            "used_date": (stock_item.metadata or {}).get("used_date"),
         })
 
 
@@ -408,10 +481,10 @@ class NFCUnlinkView(APIView):
     """
     DELETE /link/<uid>/
     Soft-deletes (deactivates) an NFC tag link.
-    Staff only.
+    Any logged-in user (all actions are recorded with user + timestamp).
     """
 
-    permission_classes: ClassVar = [permissions.IsAdminUser]
+    permission_classes: ClassVar = [permissions.IsAuthenticated]
 
     def delete(self, request, uid, *args, **kwargs):
         from .models import NFCTagLink
@@ -421,7 +494,29 @@ class NFCUnlinkView(APIView):
         try:
             link = NFCTagLink.objects.get(uid=uid, active=True)
             link.active = False
+            # Set unlink audit fields if the columns exist (post-migration).
+            try:
+                from django.utils import timezone
+
+                link.unlinked_by = request.user
+                link.unlinked_at = timezone.now()
+            except Exception:
+                pass
             link.save()
+
+            # Track the unlink event as the reliable history source.
+            try:
+                from stock.models import StockItemTracking
+
+                StockItemTracking.objects.create(
+                    item=link.stock_item,
+                    user=request.user,
+                    notes=f"NFC: tag {uid} unlinked",
+                    deltas={"nfc_unlink": uid},
+                )
+            except Exception:
+                pass
+
             return Response({"success": True, "uid": uid})
         except NFCTagLink.DoesNotExist:
             return Response(
@@ -906,11 +1001,28 @@ class NFCCreateItemView(APIView):
                 expiry_date=expiry_date,
             )
 
+            # Keep depleted units as "out of stock" records (never auto-delete).
+            if getattr(stock_item, "delete_on_deplete", False):
+                stock_item.delete_on_deplete = False
+
             meta_update = {"container_type": container_type}
             if received_date:
                 meta_update["received_date"] = received_date
             stock_item.metadata = {**(stock_item.metadata or {}), **meta_update}
             stock_item.save()
+
+            # Record a creation event so it appears in the unit's history.
+            try:
+                from stock.models import StockItemTracking
+
+                StockItemTracking.objects.create(
+                    item=stock_item,
+                    user=request.user,
+                    notes=f"NFC: unit created ({container_type})",
+                    deltas={"quantity": float(stock_item.quantity), "created": True},
+                )
+            except Exception:
+                pass
 
             tag_linked = False
             if uid:
@@ -946,3 +1058,88 @@ class NFCPartInfoView(APIView):
         data = _serialize_part(part)
         data["found"] = True
         return Response(data)
+
+
+class NFCHistoryView(APIView):
+    """
+    GET /history/<stock_item_id>/
+    Return a combined, chronological history for a unit:
+      - stock changes (add/remove/used) with user, time, quantity delta
+      - tag link / unlink events with user and time
+    """
+
+    permission_classes: ClassVar = [permissions.IsAuthenticated]
+
+    def get(self, request, stock_item_id, *args, **kwargs):
+        from stock.models import StockItem
+
+        from .models import NFCTagLink
+
+        item = StockItem.objects.filter(pk=stock_item_id).first()
+        if not item:
+            return Response({"found": False, "events": []})
+
+        events = []
+
+        # Everything is read from StockItemTracking — one consistent source.
+        # Entry kinds are distinguished by their delta keys / notes:
+        #   created  -> unit creation (who + when + initial quantity)
+        #   nfc_link -> a tag was linked from the Tag page
+        #   nfc_unlink -> a tag was unlinked
+        #   otherwise -> a stock quantity change (add/remove/consume)
+        try:
+            from stock.models import StockItemTracking
+
+            for tr in (
+                StockItemTracking.objects.filter(item=item)
+                .select_related("user")
+                .order_by("-date")
+            ):
+                deltas = tr.deltas or {}
+                when = tr.date.isoformat() if tr.date else None
+                who = tr.user.username if tr.user else None
+
+                if deltas.get("created"):
+                    events.append({
+                        "type": "created",
+                        "when": when,
+                        "who": who,
+                        "quantity": deltas.get("quantity"),
+                        "notes": tr.notes,
+                    })
+                elif deltas.get("nfc_link"):
+                    events.append({
+                        "type": "link",
+                        "when": when,
+                        "who": who,
+                        "uid": deltas.get("nfc_link"),
+                    })
+                elif deltas.get("nfc_unlink"):
+                    events.append({
+                        "type": "unlink",
+                        "when": when,
+                        "who": who,
+                        "uid": deltas.get("nfc_unlink"),
+                    })
+                else:
+                    change = (
+                        deltas.get("added")
+                        if deltas.get("added") is not None
+                        else (
+                            -deltas.get("removed")
+                            if deltas.get("removed") is not None
+                            else None
+                        )
+                    )
+                    events.append({
+                        "type": "stock",
+                        "when": when,
+                        "who": who,
+                        "notes": tr.notes,
+                        "quantity": deltas.get("quantity"),
+                        "added": change,
+                    })
+        except Exception:
+            pass
+
+        return Response({"found": True, "events": events})

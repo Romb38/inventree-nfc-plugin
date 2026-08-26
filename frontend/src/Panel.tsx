@@ -20,12 +20,13 @@ import {
   Title
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconLink, IconMinus, IconPlus, IconTrash, IconWifi } from '@tabler/icons-react';
+import { IconAlertTriangle, IconLink, IconMinus, IconTrash, IconWifi } from '@tabler/icons-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { LocalizedComponent } from './locale';
 import { CreateTabs } from './CreateForms';
 import { playSound } from './sound';
+import { getEffectiveConfig } from './agentConfig';
 
 // Trim trailing zeros: 65.0000 -> "65", 65.5000 -> "65.5"
 function fmtQty(v: number | string | null | undefined): string {
@@ -65,6 +66,8 @@ interface Tube {
   received_date: string | null;
   location: string | null;
   quantity: number;
+  out_of_stock?: boolean;
+  used_date?: string | null;
   container_type?: string;
   behaviour?: 'whole' | 'quantity';
   unit?: string | null;
@@ -245,7 +248,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
   const configQuery = useQuery<NfcConfig>(
     {
       queryKey: ['nfc-config'],
-      queryFn: () => context.api.get('/plugin/nfc/config/').then((r) => r.data),
+      queryFn: () => getEffectiveConfig(context.api),
       staleTime: 0,
       refetchOnWindowFocus: true,
     },
@@ -458,6 +461,8 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
 
   // Stock adjust: the scanned tube is the target (no picker).
   const [adjustQty, setAdjustQty] = useState<number | string>(1);
+  const [history, setHistory] = useState<any[] | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   // Confirm popup before navigating to a tube's stock item page
   const [tubeToVisit, setTubeToVisit] = useState<Tube | null>(null);
@@ -495,22 +500,39 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
         });
       },
       onSuccess: (res, vars) => {
+        const nowOut = !!res.data.out_of_stock;
+        const changed = res.data.quantity_changed;
+        const unit = scannedTube?.unit ? ` ${scannedTube.unit}` : '';
         playSound(config!.sound_enabled, 'success');
         notifications.show({
           title:
-            vars.action === 'add'
-              ? t`Stock added`
-              : vars.action === 'consume'
-                ? t`Unit marked as used`
-                : t`Stock removed`,
-          message: `${res.data.part_name}: ${fmtQty(res.data.new_stock)}`,
+            vars.action === 'consume'
+              ? t`Unit marked as used`
+              : t`Stock removed`,
+          message:
+            vars.action === 'consume'
+              ? `${res.data.part_name}`
+              : `${t`Removed`} ${changed}${unit} · ${t`Remaining:`} ${fmtQty(res.data.new_stock)}${unit}`,
           color: 'green'
         });
-        // Update the scanned tube's quantity in place
+        // If this action brought the unit to zero, announce out of stock.
+        if (nowOut) {
+          notifications.show({
+            title: t`Out of stock`,
+            message: t`This unit is now out of stock.`,
+            color: 'orange'
+          });
+        }
+        // Update the scanned tube in place (quantity + out-of-stock state)
         if (findResult && scannedTube) {
           setFindResult({
             ...findResult,
-            scanned_tube: { ...scannedTube, quantity: res.data.new_stock }
+            scanned_tube: {
+              ...scannedTube,
+              quantity: res.data.new_stock,
+              out_of_stock: nowOut,
+              used_date: res.data.used_date ?? scannedTube.used_date
+            }
           });
         }
       },
@@ -605,8 +627,8 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
       </Group>
 
       <Accordion defaultValue='scan'>
-        {/* Link / Unlink — staff + stock item page only */}
-        {stockItemId && isStaff && (
+        {/* Link / Unlink — any logged-in user, stock item page only */}
+        {stockItemId && (
           <Accordion.Item value='link'>
             <Accordion.Control>
               <Title c={context.theme.primaryColor} order={4}>
@@ -739,70 +761,112 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                             component='button'
                             type='button'
                             style={{ fontSize: 'var(--mantine-font-size-sm)' }}
-                            onClick={() => setTubeToVisit(findResult.scanned_tube!)}
+                            onClick={() =>
+                              findResult.scanned_tube &&
+                              setTubeToVisit(findResult.scanned_tube)
+                            }
                           >
                             {t`Scanned tube`}
                           </Anchor>
                           <Badge color='teal' variant='light'>
-                            {findResult.scanned_tube.batch ?? t`No lot`}
+                            {findResult.scanned_tube?.batch ?? t`No lot`}
                           </Badge>
                         </Group>
 
-                        {findResult.scanned_tube.serial && (
-                          <Text size='xs'>{t`Unit no.:`} {findResult.scanned_tube.serial}</Text>
+                        {findResult.scanned_tube?.serial && (
+                          <Text size='xs'>{t`Unit no.:`} {findResult.scanned_tube?.serial}</Text>
                         )}
-                        {findResult.scanned_tube.batch && (
-                          <Text size='xs'>{t`Lot:`} {findResult.scanned_tube.batch}</Text>
+                        {findResult.scanned_tube?.batch && (
+                          <Text size='xs'>{t`Lot:`} {findResult.scanned_tube?.batch}</Text>
                         )}
-                        {findResult.scanned_tube.expiry_date && (
-                          <Text size='xs'>{t`Expiry:`} {findResult.scanned_tube.expiry_date}</Text>
+                        {findResult.scanned_tube?.expiry_date && (
+                          <Text size='xs'>{t`Expiry:`} {findResult.scanned_tube?.expiry_date}</Text>
                         )}
-                        {findResult.scanned_tube.received_date && (
-                          <Text size='xs'>{t`Received:`} {findResult.scanned_tube.received_date}</Text>
+                        {findResult.scanned_tube?.received_date && (
+                          <Text size='xs'>{t`Received:`} {findResult.scanned_tube?.received_date}</Text>
                         )}
-                        {findResult.scanned_tube.location && (
-                          <Text size='xs'>{t`Location:`} {findResult.scanned_tube.location}</Text>
+                        {findResult.scanned_tube?.location && (
+                          <Text size='xs'>{t`Location:`} {findResult.scanned_tube?.location}</Text>
                         )}
 
-                        {findResult.scanned_tube.behaviour === 'quantity' ? (
+                        {findResult.scanned_tube?.out_of_stock ? (
+                          <Alert
+                            color='orange'
+                            variant='light'
+                            mt={8}
+                            p='xs'
+                            icon={<IconAlertTriangle size={16} />}
+                          >
+                            <Text size='sm' fw={600}>{t`Out of stock`}</Text>
+                            {findResult.scanned_tube?.used_date && (
+                              <Text size='xs' c='dimmed'>
+                                {t`Used on:`} {findResult.scanned_tube?.used_date}
+                              </Text>
+                            )}
+                            <Text size='xs' c='dimmed'>
+                              {t`The tag stays linked until someone unlinks it.`}
+                            </Text>
+                          </Alert>
+                        ) : findResult.scanned_tube?.behaviour === 'quantity' ? (
                           <>
                             <NumberInput
                               size='xs'
                               mt={8}
                               label={
-                                findResult.scanned_tube.unit
-                                  ? `${t`Amount to add / remove`} (${findResult.scanned_tube.unit})`
-                                  : t`Amount to add / remove`
+                                findResult.scanned_tube?.unit
+                                  ? `${t`Amount to remove`} (${findResult.scanned_tube?.unit})`
+                                  : t`Amount to remove`
                               }
-                              description={`${t`Remaining:`} ${fmtQty(findResult.scanned_tube.quantity)}${findResult.scanned_tube.unit ? ` ${findResult.scanned_tube.unit}` : ''}`}
+                              description={`${t`Remaining:`} ${fmtQty(findResult.scanned_tube?.quantity)}${findResult.scanned_tube?.unit ? ` ${findResult.scanned_tube?.unit}` : ''}`}
                               min={0}
+                              max={findResult.scanned_tube?.quantity}
                               value={adjustQty}
                               onChange={setAdjustQty}
                             />
-                            <Group grow gap='xs' mt={6}>
-                              <Button
-                                size='xs'
-                                color='green'
-                                variant='filled'
-                                leftSection={<IconPlus size={14} />}
-                                disabled={stockMutation.isPending}
-                                loading={stockMutation.isPending}
-                                onClick={() => stockMutation.mutate({ action: 'add' })}
-                              >
-                                {t`Add`}
-                              </Button>
-                              <Button
-                                size='xs'
-                                color='red'
-                                variant='filled'
-                                leftSection={<IconMinus size={14} />}
-                                disabled={stockMutation.isPending}
-                                loading={stockMutation.isPending}
-                                onClick={() => stockMutation.mutate({ action: 'remove' })}
-                              >
-                                {t`Remove`}
-                              </Button>
-                            </Group>
+                            <Button
+                              size='xs'
+                              color='red'
+                              variant='filled'
+                              mt={6}
+                              fullWidth
+                              leftSection={<IconMinus size={14} />}
+                              disabled={stockMutation.isPending}
+                              loading={stockMutation.isPending}
+                              onClick={() => {
+                                const tube = findResult.scanned_tube;
+                                if (!tube) return;
+                                const qty =
+                                  typeof adjustQty === 'string'
+                                    ? parseFloat(adjustQty)
+                                    : adjustQty;
+                                if (!qty || qty <= 0) {
+                                  notifications.show({
+                                    title: t`Invalid amount`,
+                                    message: t`Enter an amount greater than 0.`,
+                                    color: 'red'
+                                  });
+                                  return;
+                                }
+                                if (qty > tube.quantity) {
+                                  notifications.show({
+                                    title: t`Too much`,
+                                    message: t`You can't remove more than what remains.`,
+                                    color: 'red'
+                                  });
+                                  return;
+                                }
+                                const u = tube.unit ? ` ${tube.unit}` : '';
+                                if (
+                                  window.confirm(
+                                    `${t`Remove`} ${qty}${u} ${t`from this unit?`}`
+                                  )
+                                ) {
+                                  stockMutation.mutate({ action: 'remove' });
+                                }
+                              }}
+                            >
+                              {t`Remove`}
+                            </Button>
                           </>
                         ) : (
                           // Whole unit (ampoule): consumed entirely, single action.
@@ -829,6 +893,73 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                           </Button>
                         )}
                       </Box>
+
+                      {/* History — who did what, when, and how much */}
+                      <div>
+                        <Button
+                          size='xs'
+                          variant='subtle'
+                          mt={4}
+                          loading={historyLoading}
+                          onClick={async () => {
+                            if (history) {
+                              setHistory(null); // toggle closed
+                              return;
+                            }
+                            setHistoryLoading(true);
+                            try {
+                              const r = await context.api.get(
+                                `/plugin/nfc/history/${findResult.scanned_tube?.id}/`
+                              );
+                              setHistory(r.data?.events ?? []);
+                            } catch {
+                              setHistory([]);
+                            } finally {
+                              setHistoryLoading(false);
+                            }
+                          }}
+                        >
+                          {history ? t`Hide history` : t`Show history`}
+                        </Button>
+
+                        {history && history.length === 0 && (
+                          <Text size='xs' c='dimmed'>{t`No history yet.`}</Text>
+                        )}
+                        {history && history.length > 0 && (
+                          <Stack gap={4} mt={4}>
+                            {history.map((ev, i) => (
+                              <Box
+                                key={i}
+                                style={{
+                                  border: '1px solid var(--mantine-color-gray-3)',
+                                  borderRadius: 6,
+                                  padding: 6
+                                }}
+                              >
+                                <Text size='xs' fw={600}>
+                                  {ev.type === 'stock'
+                                    ? t`Stock change`
+                                    : ev.type === 'link'
+                                      ? t`Tag linked`
+                                      : t`Tag unlinked`}
+                                </Text>
+                                <Text size='xs' c='dimmed'>
+                                  {ev.who ? `${t`By`} ${ev.who}` : t`By unknown`}
+                                  {ev.when ? ` · ${new Date(ev.when).toLocaleString()}` : ''}
+                                </Text>
+                                {ev.type === 'stock' && ev.added != null && (
+                                  <Text size='xs'>
+                                    {t`Change:`} {ev.added} · {t`Result:`} {ev.quantity}
+                                  </Text>
+                                )}
+                                {ev.notes && (
+                                  <Text size='xs' c='dimmed'>{ev.notes}</Text>
+                                )}
+                              </Box>
+                            ))}
+                          </Stack>
+                        )}
+                      </div>
 
                       {/* ZONE 3 — sibling tubes (read-only) */}
                       {findResult.sibling_tubes && findResult.sibling_tubes.length > 0 && (
@@ -870,7 +1001,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                         color='teal'
                         mt={4}
                         onClick={() =>
-                          context.navigate(`/stock/item/${findResult.scanned_tube!.id}/`)
+                          context.navigate(`/stock/item/${findResult.scanned_tube?.id}/`)
                         }
                       >
                         {t`Go to stock item`}
