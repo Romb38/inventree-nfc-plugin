@@ -422,3 +422,313 @@ def test_history_not_found(rf, auth_user):
     request.user = auth_user
     res = _call(NFCHistoryView.as_view(), request, stock_item_id=999999)
     assert res.data["found"] is False
+
+# --- NFC history (NFCEvent) written by the views ---
+
+
+def _stock(rf, user, **body):
+    request = rf.post("/", body, format="json")
+    request.user = user
+    return _call(NFCStockView.as_view(), request)
+
+
+def _events(item):
+    from nfc.models import NFCEvent
+
+    return list(NFCEvent.objects.filter(stock_item=item).order_by("date", "pk"))
+
+
+@pytest.mark.django_db
+def test_stock_add_records_event(rf, auth_user, stock_item_factory, nfc_link_factory):
+    """Adding stock updates the quantity and records a 'stock' event."""
+    item = stock_item_factory(quantity=10)
+    nfc_link_factory(uid="AABBCCDD", stock_item=item)
+    res = _stock(rf, auth_user, uid="AABBCCDD", quantity=5, action="add")
+    assert res.status_code == 200
+    assert res.data["new_stock"] == 15.0
+    assert res.data["out_of_stock"] is False
+    [event] = _events(item)
+    assert (event.kind, float(event.delta), float(event.quantity)) == ("stock", 5.0, 15.0)
+    assert event.user_id == auth_user.pk
+
+
+@pytest.mark.django_db
+def test_stock_partial_remove_records_native_and_nfc_history(
+    rf, auth_user, stock_item_factory, nfc_link_factory
+):
+    """A partial removal goes through InvenTree's stock API (audit log) and the NFC history."""
+    from audit.models import AuditLogEntry
+
+    item = stock_item_factory(quantity=10)
+    nfc_link_factory(uid="AABBCCDD", stock_item=item)
+    res = _stock(rf, auth_user, uid="AABBCCDD", quantity=3, action="remove")
+    assert res.status_code == 200
+    assert res.data["new_stock"] == 7.0
+    [event] = _events(item)
+    assert (event.kind, float(event.delta)) == ("stock", -3.0)
+    assert any(
+        (entry.additional_data or {}).get("deltas", {}).get("removed") == 3.0
+        for entry in AuditLogEntry.objects.filter(object_id=item.pk)
+    )
+
+
+@pytest.mark.django_db
+def test_stock_invalid_action_rejected(rf, auth_user, nfc_link_factory):
+    """An unknown action is rejected instead of being treated as 'add'."""
+    link = nfc_link_factory(uid="AABBCCDD")
+    res = _stock(rf, auth_user, uid="AABBCCDD", quantity=1, action="steal")
+    assert res.status_code == 400
+    assert _events(link.stock_item) == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("quantity", [0, -1, "abc", None])
+def test_stock_invalid_quantity_rejected(rf, auth_user, nfc_link_factory, quantity):
+    """A missing, zero, negative or non-numeric quantity is rejected."""
+    link = nfc_link_factory(uid="AABBCCDD")
+    body = {"uid": "AABBCCDD", "action": "remove"}
+    if quantity is not None:
+        body["quantity"] = quantity
+    res = _stock(rf, auth_user, **body)
+    assert res.status_code == 400
+    link.stock_item.refresh_from_db()
+    assert float(link.stock_item.quantity) == 1.0
+
+
+@pytest.mark.django_db
+def test_stock_unlinked_tag_rejected(rf, auth_user):
+    """A tag with no active link is rejected."""
+    res = _stock(rf, auth_user, uid="DEADBEEF", quantity=1, action="add")
+    assert res.status_code == 400
+
+
+@pytest.mark.django_db
+def test_stock_sibling_of_other_part_not_found(
+    rf, auth_user, stock_item_factory, nfc_link_factory
+):
+    """A stock_item_id from another product is not adjusted."""
+    nfc_link_factory(uid="AABBCCDD")
+    other = stock_item_factory(quantity=5)
+    res = _stock(
+        rf, auth_user, uid="AABBCCDD", stock_item_id=other.pk, quantity=1, action="remove"
+    )
+    assert res.status_code == 404
+    other.refresh_from_db()
+    assert float(other.quantity) == 5.0
+
+
+@pytest.mark.django_db
+def test_stock_too_much_message_and_unchanged(
+    rf, auth_user, stock_item_factory, nfc_link_factory
+):
+    """Over-removal reports the available quantity and changes nothing."""
+    item = stock_item_factory(quantity=10)
+    nfc_link_factory(uid="AABBCCDD", stock_item=item)
+    res = _stock(rf, auth_user, uid="AABBCCDD", quantity=12, action="remove")
+    assert res.status_code == 400
+    assert res.data["error"] == "Not enough stock. Available: 10."
+    item.refresh_from_db()
+    assert float(item.quantity) == 10.0
+    assert _events(item) == []
+
+
+@pytest.mark.django_db
+def test_consume_serialized_ampoule(rf, auth_user, stock_item_factory, nfc_link_factory):
+    """Consuming a serialized ampoule sets it to 0, keeps its number and records 'consumed'."""
+    from datetime import date
+
+    from nfc.views import _serialize_tube
+
+    item = stock_item_factory(quantity=1, serial="7")
+    nfc_link_factory(uid="AABBCCDD", stock_item=item)
+    res = _stock(rf, auth_user, uid="AABBCCDD", quantity=1, action="remove")
+    assert res.status_code == 200
+    assert res.data["new_stock"] == 0.0
+    assert res.data["out_of_stock"] is True
+    assert res.data["used_date"] == date.today().isoformat()
+    item.refresh_from_db()
+    assert _serialize_tube(item)["serial"] == "7"
+    [event] = _events(item)
+    assert (event.kind, float(event.delta), float(event.quantity)) == ("consumed", -1.0, 0.0)
+
+
+@pytest.mark.django_db
+def test_consume_bag_keeps_unit(rf, auth_user, stock_item_factory, nfc_link_factory):
+    """Consuming a whole bag never deletes it, even with delete_on_deplete set."""
+    from stock.models import StockItem
+
+    item = stock_item_factory(quantity=10, metadata={"container_type": "Poche"})
+    StockItem.objects.filter(pk=item.pk).update(delete_on_deplete=True)
+    nfc_link_factory(uid="AABBCCDD", stock_item=item)
+    res = _stock(rf, auth_user, uid="AABBCCDD", quantity=10, action="remove")
+    assert res.status_code == 200
+    assert res.data["out_of_stock"] is True
+    assert StockItem.objects.filter(pk=item.pk).exists()
+    assert [e.kind for e in _events(item)] == ["consumed"]
+
+
+@pytest.mark.django_db
+def test_restock_clears_used_date(rf, auth_user, stock_item_factory, nfc_link_factory):
+    """Adding stock to a depleted unit clears its used date."""
+    item = stock_item_factory(quantity=2)
+    nfc_link_factory(uid="AABBCCDD", stock_item=item)
+    assert _stock(rf, auth_user, uid="AABBCCDD", quantity=2, action="remove").data[
+        "used_date"
+    ]
+    res = _stock(rf, auth_user, uid="AABBCCDD", quantity=5, action="add")
+    assert res.status_code == 200
+    assert res.data["out_of_stock"] is False
+    assert res.data["used_date"] is None
+
+
+@pytest.mark.django_db
+def test_tag_kept_after_depletion(rf, auth_user, stock_item_factory, nfc_link_factory):
+    """The tag stays linked to a depleted unit, which is still found by a scan."""
+    item = stock_item_factory(quantity=1, serial="3")
+    nfc_link_factory(uid="AABBCCDD", stock_item=item)
+    _stock(rf, auth_user, uid="AABBCCDD", quantity=1, action="remove")
+    request = rf.get("/")
+    request.user = auth_user
+    res = _call(NFCTagView.as_view(), request, uid="AABBCCDD")
+    assert res.data["found"] is True
+    assert res.data["scanned_tube"]["id"] == item.pk
+    assert res.data["scanned_tube"]["out_of_stock"] is True
+
+
+@pytest.mark.django_db
+def test_history_failure_rolls_back_stock(
+    rf, auth_user, stock_item_factory, nfc_link_factory, monkeypatch
+):
+    """If the history cannot be written, the stock change is cancelled and a 500 is returned."""
+    import nfc.models
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("history down")
+
+    monkeypatch.setattr(nfc.models, "record_event", broken)
+    item = stock_item_factory(quantity=10)
+    nfc_link_factory(uid="AABBCCDD", stock_item=item)
+    res = _stock(rf, auth_user, uid="AABBCCDD", quantity=3, action="remove")
+    assert res.status_code == 500
+    assert "error" in res.data
+    item.refresh_from_db()
+    assert float(item.quantity) == 10.0
+
+
+@pytest.mark.django_db
+def test_stock_does_not_log_request_body(
+    rf, auth_user, nfc_link_factory, caplog
+):
+    """The request body is not written to the logs at warning level."""
+    import logging
+
+    nfc_link_factory(uid="AABBCCDD")
+    with caplog.at_level(logging.WARNING, logger="inventree"):
+        _stock(rf, auth_user, uid="AABBCCDD", quantity=1, action="add", notes="secret")
+    assert "secret" not in caplog.text
+
+
+@pytest.mark.django_db
+def test_link_and_unlink_record_events(rf, auth_user, stock_item_factory):
+    """Linking then unlinking a tag records 'link' then 'unlink' with the UID."""
+    item = stock_item_factory()
+    request = rf.post("/", {"uid": "cafe", "stock_item_id": item.pk}, format="json")
+    request.user = auth_user
+    assert _call(NFCLinkView.as_view(), request).status_code == 200
+    request = rf.delete("/")
+    request.user = auth_user
+    assert _call(NFCUnlinkView.as_view(), request, uid="CAFE").status_code == 200
+    assert [(e.kind, e.uid, e.user_id) for e in _events(item)] == [
+        ("link", "CAFE", auth_user.pk),
+        ("unlink", "CAFE", auth_user.pk),
+    ]
+
+
+@pytest.mark.django_db
+def test_create_item_records_created_with_uid(
+    rf, auth_user, part_factory, location_factory
+):
+    """Creating units records one 'created' event per unit, carrying its tag UID."""
+    from nfc.models import NFCEvent
+
+    part = part_factory()
+    location = location_factory()
+    request = rf.post(
+        "/",
+        {
+            "part_id": part.pk,
+            "container_type": "Ampoule",
+            "location_id": location.pk,
+            "uids": ["T1", "T2"],
+        },
+        format="json",
+    )
+    request.user = auth_user
+    res = _call(NFCCreateItemView.as_view(), request)
+    assert res.status_code == 200
+    events = NFCEvent.objects.filter(stock_item__part=part)
+    assert sorted((e.kind, e.uid) for e in events) == [
+        ("created", "T1"),
+        ("created", "T2"),
+    ]
+
+
+@pytest.mark.django_db
+def test_history_lists_events_most_recent_first(rf, auth_user, stock_item_factory, nfc_event_factory):
+    """The history returns every event, most recent first, in the panel format."""
+    from datetime import timedelta
+    from decimal import Decimal
+
+    from django.utils import timezone
+
+    item = stock_item_factory()
+    now = timezone.now()
+    nfc_event_factory(stock_item=item, kind="created", quantity=Decimal(1), date=now - timedelta(hours=3))
+    nfc_event_factory(stock_item=item, kind="link", uid="AABB", date=now - timedelta(hours=2), user=auth_user)
+    nfc_event_factory(
+        stock_item=item, kind="consumed", quantity=Decimal(0), delta=Decimal(-1), date=now - timedelta(hours=1)
+    )
+    request = rf.get("/")
+    request.user = auth_user
+    res = _call(NFCHistoryView.as_view(), request, stock_item_id=item.pk)
+    events = res.data["events"]
+    assert [e["type"] for e in events] == ["stock", "link", "created"]
+    assert events[0]["added"] == -1.0 and events[0]["quantity"] == 0.0
+    assert events[1]["uid"] == "AABB" and events[1]["who"] == auth_user.username
+    assert events[2]["quantity"] == 1.0 and events[2]["who"] is None
+    assert all(e["when"] for e in events)
+
+
+@pytest.mark.django_db
+def test_history_requires_authentication(rf, stock_item_factory):
+    """Anonymous users cannot read the history."""
+    item = stock_item_factory()
+    res = _call(NFCHistoryView.as_view(), rf.get("/"), stock_item_id=item.pk)
+    assert res.status_code in (401, 403)
+
+
+@pytest.mark.django_db
+def test_create_product_with_unit_records_created(rf, auth_user, location_factory):
+    """Creating a product with its first unit records a 'created' event for that unit."""
+    from nfc.models import NFCEvent
+
+    request = rf.post(
+        "/",
+        {
+            "molecule": "Paracetamol",
+            "dosage": "10 mg/ml",
+            "form": "Solution",
+            "laboratory": "B. Braun",
+            "add_unit": True,
+            "container_type": "Poche",
+            "quantity": 100,
+            "location_id": location_factory().pk,
+            "uid": "f00d",
+        },
+        format="json",
+    )
+    request.user = auth_user
+    res = _call(NFCCreateProductView.as_view(), request)
+    assert res.status_code == 200
+    [event] = NFCEvent.objects.filter(stock_item_id=res.data["stock_item_id"])
+    assert (event.kind, event.uid, event.user_id) == ("created", "F00D", auth_user.pk)

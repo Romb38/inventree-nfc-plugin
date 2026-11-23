@@ -74,9 +74,8 @@ nfc/
 │       └── locales/         # Translation catalogs
 └── nfc/                    # Django / InvenTree plugin package
     ├── core.py              # Plugin entry point (NFC class) + URL routes
-    ├── models.py            # NFCTagLink model (tag <-> stock item)
+    ├── models.py            # NFCTagLink (tag <-> stock item), NFCEvent (history)
     ├── views.py             # API endpoints (scan, link, stock, create, history)
-    ├── nfc_reader.py        # Reader helper
     ├── migrations/          # Database migrations
     └── tests/               # pytest suite
 ```
@@ -92,6 +91,10 @@ into `nfc/static/`, which InvenTree serves.
   expiry, reception date, location, quantity and **container type**.
 - An **NFCTagLink** links one tag UID to one StockItem. A tag maps to a single
   active unit; a unit has a single active tag.
+- An **NFCEvent** records one action done through the plugin on a unit
+  (creation, stock change, consumption, tag link/unlink) with its user and
+  date. It is the only source of the history shown in the panel, and is kept
+  by the plugin independently from InvenTree's own stock history.
 
 Container types drive behaviour: **Ampoule** (whole unit, consumed at once),
 **Poche** (bag, tracked in mL) and **Flacon poudre** (powder vial, tracked in
@@ -107,21 +110,30 @@ There are two things to install: the **plugin** (once, on the server) and the
 
 ### Plugin (server)
 
+Requires **InvenTree 1.7.0 or newer** (plugin 0.2.x). The plugin refuses to
+activate on older versions.
+
 On the machine running InvenTree via Docker, from the folder that holds
-`docker-compose.yml`:
+`docker-compose.yml`, add **one** line, pinned on a release tag, to the
+persistent plugin list (`plugins.txt` in the `INVENTREE_EXT_VOLUME` folder):
+
+```text
+inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.2.0
+```
+
+Then install it into the containers:
 
 ```bash
-# add the plugin to the persistent plugin list
-echo "git+https://github.com/Wassim-dxdydz/InvenTree.git#subdirectory=nfc" \
-  >> data/plugins.txt
-
-# install it into the containers
 docker compose run --rm inventree-server invoke update
 docker compose restart inventree-server inventree-worker
 ```
 
 Then in the browser: **Settings → Plugins**, enable plugins if needed, find the
 NFC plugin and activate it. Open any Part or Stock Item — the NFC panel appears.
+
+Upgrading an existing server from InvenTree 1.5.x: follow the ordered procedure
+in `docs/migration.md` (backup first — InvenTree's 1.7 migrations cannot be
+reverted).
 
 For a development install (editable, from the repo root):
 
@@ -138,7 +150,8 @@ On each Linux workstation that has a USB NFC reader:
 sudo apt-get install -y libpcsclite-dev libpcsclite1 pcscd pcsc-tools libccid
 # pyscard needs the Python headers matching your version, e.g. on Debian 13:
 sudo apt-get install -y python3.13-dev   # python3.11-dev on Debian 12, etc.
-cd nfc/agent
+git clone https://github.com/Romb38/inventree-nfc-plugin.git
+cd inventree-nfc-plugin/agent
 pip install -r requirements.txt
 python agent.py        # serves http://127.0.0.1:8765
 ```

@@ -68,3 +68,17 @@ def location_factory(db):
         return StockLocation.objects.create(name=name, description="Test")
 
     return make_location
+
+@pytest.fixture
+def nfc_event_factory(db, stock_item_factory):
+    """Create an NFCEvent on a StockItem."""
+    from nfc.models import NFCEvent
+
+    def make_event(stock_item=None, kind=NFCEvent.KIND_STOCK, user=None, **fields):
+        if stock_item is None:
+            stock_item = stock_item_factory()
+        return NFCEvent.objects.create(
+            stock_item=stock_item, kind=kind, user=user, **fields
+        )
+
+    return make_event

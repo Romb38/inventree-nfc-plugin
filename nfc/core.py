@@ -31,9 +31,7 @@ class NFC(AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugi
     WEBSITE = "https://wassimabahri.dev"
     LICENSE = "MIT"
 
-    # Optionally specify supported InvenTree versions
-    # MIN_VERSION = '0.18.0'
-    # MAX_VERSION = '2.0.0'
+    MIN_VERSION = "1.7.0"
 
     # Render custom UI elements to the plugin settings page
     ADMIN_SOURCE = "Settings.js:renderPluginSettings"

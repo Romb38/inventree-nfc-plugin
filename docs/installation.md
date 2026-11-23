@@ -19,8 +19,7 @@ nfc/                     # repository / plugin root
 │   ├── admin.py
 │   ├── apps.py
 │   ├── core.py          # Plugin entry point (NFC class) + URL routes
-│   ├── models.py
-│   ├── nfc_reader.py
+│   ├── models.py        # NFCTagLink and NFCEvent (history)
 │   └── views.py
 ├── pyproject.toml       # Package definition (name: inventree-nfc)
 └── MANIFEST.in
@@ -40,6 +39,7 @@ Before starting, make sure you have:
 - Docker and Docker Compose installed, or Docker Desktop on macOS/Windows.
 - Node.js and npm installed.
 - Python 3.9+ and `pip` available.
+- InvenTree **1.7.0 or newer** (the plugin declares `MIN_VERSION = "1.7.0"` and is not activated on older versions).
 - A compatible NFC USB reader connected to the machine.
 - Permission to use Docker and access USB devices, if required.
 
@@ -137,7 +137,7 @@ wget -q https://raw.githubusercontent.com/inventree/InvenTree/master/contrib/con
 wget -q https://raw.githubusercontent.com/inventree/InvenTree/stable/contrib/container/Caddyfile
 ```
 
-Update `.env` with your local credentials and configuration values.
+Update `.env` with your local credentials and configuration values, and set `INVENTREE_TAG` to an InvenTree version supported by the plugin (1.7.0 or newer, e.g. `INVENTREE_TAG=1.7.3`).
 
 Initialize the database and admin user:
 
@@ -178,8 +178,8 @@ source /home/inventree/dev/venv/bin/activate
 If you have not already done so, clone the repository somewhere on your machine:
 
 ```bash
-git clone <your-repo-url> NFC
-cd NFC
+git clone https://github.com/Romb38/inventree-nfc-plugin.git
+cd inventree-nfc-plugin
 ```
 
 All subsequent commands assume you are running from the root of this repository unless stated otherwise.
@@ -222,7 +222,7 @@ Use `npm run build` whenever you want InvenTree to serve the latest compiled ass
 
 ## Install NFC dependencies
 
-Install the system packages and Python libraries needed for NFC/PCSC communication:
+The plugin itself (server side) never talks to the reader. These system packages and Python libraries are only needed on machines that run the **agent** (NFC/PCSC communication):
 
 ```bash
 sudo apt-get update

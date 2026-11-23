@@ -115,7 +115,6 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
   );
 
   // Staff
-  const isStaff = useMemo(() => !!context.user?.isStaff, [context.user]);
 
   // Config
   const configQuery = useQuery<NfcConfig>(
@@ -813,7 +812,9 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                                     ? t`Stock change`
                                     : ev.type === 'link'
                                       ? t`Tag linked`
-                                      : t`Tag unlinked`}
+                                      : ev.type === 'created'
+                                        ? t`Unit created`
+                                        : t`Tag unlinked`}
                                 </Text>
                                 <Text size='xs' c='dimmed'>
                                   {ev.who ? `${t`By`} ${ev.who}` : t`By unknown`}
@@ -932,19 +933,16 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
             </Stack>
           </Accordion.Panel>
         </Accordion.Item>
-        {/* Create Product — staff only */}
-        {isStaff && (
-          <Accordion.Item value='create'>
-            <Accordion.Control>
-              <Title c={context.theme.primaryColor} order={4}>
-                {t`Create product`}
-              </Title>
-            </Accordion.Control>
-            <Accordion.Panel>
-              <CreateTabs context={context} />
-            </Accordion.Panel>
-          </Accordion.Item>
-        )}
+        <Accordion.Item value='create'>
+          <Accordion.Control>
+            <Title c={context.theme.primaryColor} order={4}>
+              {t`Create product`}
+            </Title>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <CreateTabs context={context} />
+          </Accordion.Panel>
+        </Accordion.Item>
 
         {/* Agent settings (this workstation) — available to ALL users, since
             the agent config is machine-specific and stored in the browser. */}

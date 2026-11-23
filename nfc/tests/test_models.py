@@ -60,3 +60,80 @@ def test_unique_active_stock_item_constraint(nfc_link_factory, stock_item_factor
     nfc_link_factory(uid="AABBCCDD", stock_item=item, active=True)
     with pytest.raises(IntegrityError):
         nfc_link_factory(uid="11223344", stock_item=item, active=True)
+
+
+@pytest.mark.django_db
+def test_record_event_stores_fields(stock_item_factory, django_user_model):
+    """record_event must persist every field and normalize the UID."""
+    from decimal import Decimal
+
+    from nfc.models import NFCEvent, record_event
+
+    user = django_user_model.objects.create_user(username="ev", password="pass")
+    item = stock_item_factory(quantity=10)
+    event = record_event(
+        item,
+        NFCEvent.KIND_STOCK,
+        user,
+        quantity=Decimal("7"),
+        delta=Decimal("-3"),
+        uid=" aabb ",
+        notes="test",
+    )
+    event.refresh_from_db()
+    assert event.stock_item_id == item.pk
+    assert event.kind == "stock"
+    assert event.user_id == user.pk
+    assert event.quantity == Decimal("7")
+    assert event.delta == Decimal("-3")
+    assert event.uid == "AABB"
+    assert event.notes == "test"
+    assert event.date is not None
+
+
+@pytest.mark.django_db
+def test_record_event_rejects_unknown_kind(stock_item_factory):
+    """An unknown event kind must raise instead of being silently stored."""
+    from nfc.models import NFCEvent, record_event
+
+    with pytest.raises(ValueError):
+        record_event(stock_item_factory(), "bogus", None)
+    assert NFCEvent.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_record_event_ignores_anonymous_user(stock_item_factory):
+    """An anonymous user is stored as no user."""
+    from django.contrib.auth.models import AnonymousUser
+
+    from nfc.models import NFCEvent, record_event
+
+    event = record_event(stock_item_factory(), NFCEvent.KIND_LINK, AnonymousUser())
+    assert event.user_id is None
+
+
+@pytest.mark.django_db
+def test_events_ordered_most_recent_first(nfc_event_factory, stock_item_factory):
+    """Default ordering is most recent first, then highest pk on equal dates."""
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from nfc.models import NFCEvent
+
+    item = stock_item_factory()
+    now = timezone.now()
+    old = nfc_event_factory(stock_item=item, date=now - timedelta(days=1))
+    new = nfc_event_factory(stock_item=item, date=now)
+    same = nfc_event_factory(stock_item=item, date=now)
+    assert list(NFCEvent.objects.filter(stock_item=item)) == [same, new, old]
+
+
+@pytest.mark.django_db
+def test_event_kept_when_user_deleted(nfc_event_factory, django_user_model):
+    """Deleting a user keeps their events, with no user attached."""
+    user = django_user_model.objects.create_user(username="gone", password="pass")
+    event = nfc_event_factory(user=user)
+    user.delete()
+    event.refresh_from_db()
+    assert event.user_id is None

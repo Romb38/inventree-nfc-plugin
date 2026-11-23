@@ -2,59 +2,103 @@
 API Views for the NFC plugin.
 """
 
+import logging
+from decimal import Decimal
 from typing import ClassVar
 
+from django.db import transaction
 from rest_framework import permissions, status
+from rest_framework.exceptions import APIException
 from rest_framework.response import Response
-from rest_framework.views import APIView
+from rest_framework.views import APIView, set_rollback
+
+logger = logging.getLogger("inventree")
 
 
-def _adjust_stock(stock_item, action, quantity, user, notes):
+class NFCActionRefused(Exception):
+    """Raised inside an NFC action to abort it (rolling back the transaction) with a 400 error."""
+
+
+class NFCAPIView(APIView):
+    """Base view for NFC endpoints which modify or report the NFC history.
+
+    Errors are never swallowed: an NFCActionRefused becomes a 400 response, and
+    any unexpected exception is logged and returned as a JSON 500 response. In
+    both cases the exception has already rolled back the enclosing
+    transaction, so no partial change is persisted.
     """
-    Adjust stock in a way that survives InvenTree version differences.
 
-    Different versions expose different method names on StockItem
-    (add_stock/remove_stock, addStock/removeStock) or none at all.
-    We try the model methods first, then fall back to a direct
-    quantity write + tracking entry.
-    """
-    candidates = {
-        "add": ["add_stock", "addStock"],
-        "remove": ["take_stock", "removeStock", "remove_stock"],
-    }[action]
+    def handle_exception(self, exc):
+        """Convert NFC and unexpected errors into JSON error responses."""
+        if isinstance(exc, APIException):
+            return super().handle_exception(exc)
 
-    for name in candidates:
-        method = getattr(stock_item, name, None)
-        if callable(method):
-            import logging
+        set_rollback()
 
-            logging.getLogger("inventree").info(
-                "NFC: stock %s via StockItem.%s()", action, name
-            )
-            try:
-                return method(quantity, user, notes=notes)
-            except TypeError:
-                # Some signatures don't accept notes as kwarg
-                return method(quantity, user)
+        if isinstance(exc, NFCActionRefused):
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Fallback: write the quantity directly and log a tracking entry.
-    from decimal import Decimal
-
-    delta = quantity if action == "add" else -quantity
-    stock_item.quantity = Decimal(str(stock_item.quantity)) + Decimal(str(delta))
-    stock_item.save()
-    try:
-        from stock.models import StockItemTracking
-
-        StockItemTracking.objects.create(
-            item=stock_item,
-            user=user,
-            notes=notes or f"NFC {action} {quantity}",
-            deltas={"quantity": float(stock_item.quantity), "added": float(delta)},
+        logger.exception("NFC: %s %s failed", self.request.method, self.request.path)
+        return Response(
+            {"error": "The NFC action failed and was cancelled. See the server logs."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-    except Exception:
-        pass  # tracking is best-effort; quantity change already saved
-    return stock_item
+
+
+def _change_stock(stock_item, action, quantity, user, notes):
+    """Apply a stock change to a locked unit through InvenTree's stock API.
+
+    Partial changes use StockItem.add_stock / take_stock, which record the
+    change in InvenTree's own audit log. Consuming the whole remaining
+    quantity of a serialized unit (which InvenTree refuses to decrement) keeps
+    its serial in metadata["used_serial"] and writes the zero quantity directly.
+    Depleted units are never deleted.
+
+    Args:
+        stock_item: The StockItem, locked for update.
+        action: "add" or "remove".
+        quantity: Positive Decimal quantity, not above the available quantity for "remove".
+        user: The user performing the action.
+        notes: Notes recorded with the change.
+
+    Returns:
+        A (kind, delta) tuple: the NFCEvent kind and the signed quantity change.
+
+    Raises:
+        NFCActionRefused: If InvenTree refuses the change.
+    """
+    from .models import NFCEvent
+
+    if action == "add":
+        if not stock_item.add_stock(quantity, user, notes=notes):
+            raise NFCActionRefused("InvenTree refused to add stock to this unit.")
+        stock_item.refresh_from_db()
+        return NFCEvent.KIND_STOCK, quantity
+
+    if quantity < stock_item.quantity:
+        if not stock_item.take_stock(quantity, user, notes=notes):
+            raise NFCActionRefused("InvenTree refused to remove stock from this unit.")
+        stock_item.refresh_from_db()
+        return NFCEvent.KIND_STOCK, -quantity
+
+    if stock_item.serialized:
+        stock_item.metadata = {
+            **(stock_item.metadata or {}),
+            "used_serial": str(stock_item.serial),
+        }
+        stock_item.serial = None
+        stock_item.quantity = Decimal(0)
+        stock_item.delete_on_deplete = False
+        stock_item.save()
+    else:
+        if stock_item.delete_on_deplete:
+            stock_item.delete_on_deplete = False
+            stock_item.save()
+        if not stock_item.take_stock(quantity, user, notes=notes):
+            raise NFCActionRefused("InvenTree refused to consume this unit.")
+        stock_item.refresh_from_db()
+
+    return NFCEvent.KIND_CONSUMED, -quantity
 
 
 def _container_behaviour(container_type):
@@ -177,8 +221,7 @@ class NFCTagView(APIView):
         part = tube.part
 
         siblings = (
-            StockItem.objects
-            .filter(part=part)
+            StockItem.objects.filter(part=part)
             .exclude(pk=tube.pk)
             .select_related("location")
             .order_by("expiry_date", "-quantity")
@@ -194,7 +237,7 @@ class NFCTagView(APIView):
         })
 
 
-class NFCLinkView(APIView):
+class NFCLinkView(NFCAPIView):
     """
     POST /link/
     Link an NFC tag UID to a specific StockItem (tube).
@@ -206,7 +249,7 @@ class NFCLinkView(APIView):
     def post(self, request, *args, **kwargs):
         from stock.models import StockItem
 
-        from .models import NFCTagLink
+        from .models import NFCEvent, NFCTagLink, record_event
 
         uid = str(request.data.get("uid", "")).strip().upper()
         stock_item_id = request.data.get("stock_item_id")
@@ -237,26 +280,20 @@ class NFCLinkView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        link = NFCTagLink.objects.create(
-            uid=uid,
-            stock_item=stock_item,
-            linked_by=request.user,
-            active=True,
-        )
-
-        # Track the link event (this is a deliberate link from the Tag page,
-        # not the automatic one at unit creation).
-        try:
-            from stock.models import StockItemTracking
-
-            StockItemTracking.objects.create(
-                item=stock_item,
-                user=request.user,
-                notes=f"NFC: tag {uid} linked",
-                deltas={"nfc_link": uid},
+        with transaction.atomic():
+            link = NFCTagLink.objects.create(
+                uid=uid,
+                stock_item=stock_item,
+                linked_by=request.user,
+                active=True,
             )
-        except Exception:
-            pass
+            record_event(
+                stock_item,
+                NFCEvent.KIND_LINK,
+                request.user,
+                uid=uid,
+                notes=f"NFC: tag {uid} linked",
+            )
 
         return Response({
             "success": True,
@@ -267,7 +304,7 @@ class NFCLinkView(APIView):
         })
 
 
-class NFCStockView(APIView):
+class NFCStockView(NFCAPIView):
     """
     POST /stock/
     Add or remove stock for a part linked to an NFC tag.
@@ -277,24 +314,17 @@ class NFCStockView(APIView):
     permission_classes: ClassVar = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        import logging
+        from datetime import date
+        from decimal import InvalidOperation
 
         from stock.models import StockItem
 
-        from .models import NFCTagLink
-
-        logging.getLogger("inventree").warning(
-            "NFC stock POST body: %r", dict(request.data)
-        )
+        from .models import NFCTagLink, record_event
 
         uid = str(request.data.get("uid", "")).strip().upper()
-        # Optional: adjust a specific tube (e.g. a sibling the user tapped).
-        # If omitted, we adjust the tube the tag is linked to.
         stock_item_id = request.data.get("stock_item_id")
         action = str(request.data.get("action", "add")).strip().lower()
         notes = str(request.data.get("notes", f"NFC {action}")).strip()
-
-        from decimal import Decimal, InvalidOperation
 
         try:
             quantity = Decimal(str(request.data.get("quantity", 0)))
@@ -307,7 +337,9 @@ class NFCStockView(APIView):
         missing = []
         if not uid:
             missing.append("uid")
-        if quantity <= 0:
+        if action not in ("add", "remove"):
+            missing.append("action (add|remove)")
+        if not quantity.is_finite() or quantity <= 0:
             missing.append("quantity > 0")
         if missing:
             return Response(
@@ -327,83 +359,50 @@ class NFCStockView(APIView):
 
         part = link.stock_item.part
 
-        from django.db import transaction
-
         with transaction.atomic():
-            # Default target = the linked tube. Optionally a sibling of same part.
             target_id = stock_item_id or link.stock_item_id
             try:
                 stock_item = StockItem.objects.select_for_update().get(
                     pk=target_id, part=part
                 )
-            except StockItem.DoesNotExist:
+            except (StockItem.DoesNotExist, ValueError, TypeError):
                 return Response(
                     {"error": "Target tube not found for this product."},
                     status=status.HTTP_404_NOT_FOUND,
                 )
 
-            if action == "remove":
-                if stock_item.quantity < quantity:
-                    available = stock_item.quantity.normalize()
-                    return Response(
-                        {"error": f"Not enough stock. Available: {available:f}."},
-                        status=status.HTTP_400_BAD_REQUEST,
-                    )
-                # Removing the entire remaining quantity (e.g. consuming an
-                # ampoule). Serialized items refuse quantity decrements via the
-                # normal stock methods, so set the quantity to 0 directly and
-                # record a tracking entry. This reliably depletes any unit.
-                from decimal import Decimal
+            if action == "remove" and stock_item.quantity < quantity:
+                available = stock_item.quantity.normalize()
+                return Response(
+                    {"error": f"Not enough stock. Available: {available:f}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-                if Decimal(str(quantity)) >= Decimal(str(stock_item.quantity)):
-                    from stock.models import StockItemTracking
-
-                    # A serialized item is pinned to quantity 1 by InvenTree —
-                    # it cannot be saved at 0 while it has a serial. To mark it
-                    # used (out of stock) we clear the serial, then set 0.
-                    if stock_item.serial:
-                        # Preserve the unit number in metadata for history.
-                        meta_serial = stock_item.metadata or {}
-                        meta_serial["used_serial"] = str(stock_item.serial)
-                        stock_item.metadata = meta_serial
-                        stock_item.serial = None
-                    stock_item.quantity = Decimal("0")
-                    stock_item.save()
-                    try:
-                        StockItemTracking.objects.create(
-                            item=stock_item,
-                            user=request.user,
-                            notes=notes or "NFC consume (unit used)",
-                            deltas={"quantity": 0.0, "removed": float(quantity)},
-                        )
-                    except Exception:
-                        pass
-                else:
-                    _adjust_stock(stock_item, "remove", quantity, request.user, notes)
-            else:
-                _adjust_stock(stock_item, "add", quantity, request.user, notes)
-
-            stock_item.refresh_from_db()
-
-            # When a unit reaches 0 it becomes "out of stock": keep the record
-            # (never auto-delete) and stamp the used date. The NFC tag link is
-            # intentionally NOT removed — only a manual unlink detaches it.
-            from datetime import date
+            kind, delta = _change_stock(
+                stock_item, action, quantity, request.user, notes
+            )
 
             meta = stock_item.metadata or {}
-            if float(stock_item.quantity) <= 0:
-                # Prevent InvenTree from deleting the depleted item.
-                if getattr(stock_item, "delete_on_deplete", False):
-                    stock_item.delete_on_deplete = False
+            if stock_item.quantity <= 0:
                 if not meta.get("used_date"):
-                    meta["used_date"] = date.today().isoformat()
-                    stock_item.metadata = meta
-                stock_item.save()
+                    stock_item.metadata = {
+                        **meta,
+                        "used_date": date.today().isoformat(),
+                    }
+                    stock_item.save()
             elif meta.get("used_date"):
-                # Stock was added back → it's no longer used/out of stock.
                 meta.pop("used_date", None)
                 stock_item.metadata = meta
                 stock_item.save()
+
+            record_event(
+                stock_item,
+                kind,
+                request.user,
+                quantity=stock_item.quantity,
+                delta=delta,
+                notes=notes,
+            )
 
         stock_item.refresh_from_db()
 
@@ -477,7 +476,7 @@ class NFCTagByPartView(APIView):
         })
 
 
-class NFCUnlinkView(APIView):
+class NFCUnlinkView(NFCAPIView):
     """
     DELETE /link/<uid>/
     Soft-deletes (deactivates) an NFC tag link.
@@ -487,42 +486,38 @@ class NFCUnlinkView(APIView):
     permission_classes: ClassVar = [permissions.IsAuthenticated]
 
     def delete(self, request, uid, *args, **kwargs):
-        from .models import NFCTagLink
+        from django.utils import timezone
+
+        from .models import NFCEvent, NFCTagLink, record_event
 
         uid = uid.strip().upper()
 
-        try:
-            link = NFCTagLink.objects.get(uid=uid, active=True)
-            link.active = False
-            # Set unlink audit fields if the columns exist (post-migration).
-            try:
-                from django.utils import timezone
+        with transaction.atomic():
+            link = (
+                NFCTagLink.objects.select_for_update()
+                .filter(uid=uid, active=True)
+                .first()
+            )
+            if link is None:
+                return Response(
+                    {"error": f"No active link found for UID {uid}."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
-                link.unlinked_by = request.user
-                link.unlinked_at = timezone.now()
-            except Exception:
-                pass
+            link.active = False
+            link.unlinked_by = request.user
+            link.unlinked_at = timezone.now()
             link.save()
 
-            # Track the unlink event as the reliable history source.
-            try:
-                from stock.models import StockItemTracking
-
-                StockItemTracking.objects.create(
-                    item=link.stock_item,
-                    user=request.user,
-                    notes=f"NFC: tag {uid} unlinked",
-                    deltas={"nfc_unlink": uid},
-                )
-            except Exception:
-                pass
-
-            return Response({"success": True, "uid": uid})
-        except NFCTagLink.DoesNotExist:
-            return Response(
-                {"error": f"No active link found for UID {uid}."},
-                status=status.HTTP_404_NOT_FOUND,
+            record_event(
+                link.stock_item,
+                NFCEvent.KIND_UNLINK,
+                request.user,
+                uid=uid,
+                notes=f"NFC: tag {uid} unlinked",
             )
+
+        return Response({"success": True, "uid": uid})
 
 
 class NFCStockItemsView(APIView):
@@ -550,8 +545,7 @@ class NFCStockItemsView(APIView):
 
         part = link.stock_item.part
         items = (
-            StockItem.objects
-            .filter(part=part)
+            StockItem.objects.filter(part=part)
             .select_related("location")
             .order_by("expiry_date", "-quantity")
         )
@@ -655,8 +649,7 @@ def _set_part_parameter(part, template_name, value):
         existing = None
         try:
             existing = (
-                ParamModel.objects
-                .filter(template=template)
+                ParamModel.objects.filter(template=template)
                 .filter(model_id=part.pk)
                 .first()
             )
@@ -681,7 +674,7 @@ def _set_part_parameter(part, template_name, value):
         )
 
 
-class NFCCreateProductView(APIView):
+class NFCCreateProductView(NFCAPIView):
     """
     POST /create-product/
     Create a Part (auto-named) + its parameters + first stock item in one call.
@@ -702,13 +695,12 @@ class NFCCreateProductView(APIView):
     permission_classes: ClassVar = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        from decimal import Decimal, InvalidOperation
+        from decimal import InvalidOperation
 
-        from django.db import transaction
         from part.models import Part
         from stock.models import StockItem, StockLocation
 
-        from .models import NFCTagLink
+        from .models import NFCEvent, NFCTagLink, record_event
 
         d = request.data
         molecule = str(d.get("molecule", "")).strip()
@@ -832,6 +824,15 @@ class NFCCreateProductView(APIView):
                     stock_item.metadata = {**(stock_item.metadata or {}), **meta_update}
                     stock_item.save()
 
+                record_event(
+                    stock_item,
+                    NFCEvent.KIND_CREATED,
+                    request.user,
+                    quantity=stock_item.quantity,
+                    uid=uid,
+                    notes=f"NFC: unit created ({ct or 'unknown container'})",
+                )
+
                 if uid:
                     NFCTagLink.objects.create(
                         uid=uid,
@@ -866,7 +867,7 @@ class NFCCreateProductView(APIView):
         })
 
 
-class NFCCreateItemView(APIView):
+class NFCCreateItemView(NFCAPIView):
     """
     POST /create-item/
     Create a stock item (physical unit) for an EXISTING part.
@@ -883,13 +884,12 @@ class NFCCreateItemView(APIView):
     permission_classes: ClassVar = [permissions.IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
-        from decimal import Decimal, InvalidOperation
+        from decimal import InvalidOperation
 
-        from django.db import transaction
         from part.models import Part
         from stock.models import StockItem, StockLocation
 
-        from .models import NFCTagLink
+        from .models import NFCEvent, NFCTagLink, record_event
 
         d = request.data
         part_id = d.get("part_id")
@@ -964,14 +964,11 @@ class NFCCreateItemView(APIView):
 
         # Reject any tag already linked, before creating anything.
         conflict = [
-            u for u in uids
-            if NFCTagLink.objects.filter(uid=u, active=True).exists()
+            u for u in uids if NFCTagLink.objects.filter(uid=u, active=True).exists()
         ]
         if conflict:
             return Response(
-                {
-                    "error": f"These tags are already linked: {', '.join(conflict)}."
-                },
+                {"error": f"These tags are already linked: {', '.join(conflict)}."},
                 status=status.HTTP_409_CONFLICT,
             )
 
@@ -1032,17 +1029,14 @@ class NFCCreateItemView(APIView):
                 stock_item.metadata = {**(stock_item.metadata or {}), **meta_update}
                 stock_item.save()
 
-                try:
-                    from stock.models import StockItemTracking
-
-                    StockItemTracking.objects.create(
-                        item=stock_item,
-                        user=request.user,
-                        notes=f"NFC: unit created ({container_type})",
-                        deltas={"quantity": float(stock_item.quantity), "created": True},
-                    )
-                except Exception:
-                    pass
+                record_event(
+                    stock_item,
+                    NFCEvent.KIND_CREATED,
+                    request.user,
+                    quantity=stock_item.quantity,
+                    uid=one_uid or "",
+                    notes=f"NFC: unit created ({container_type})",
+                )
 
                 if one_uid:
                     NFCTagLink.objects.create(
@@ -1083,12 +1077,13 @@ class NFCPartInfoView(APIView):
         return Response(data)
 
 
-class NFCHistoryView(APIView):
+class NFCHistoryView(NFCAPIView):
     """
     GET /history/<stock_item_id>/
-    Return a combined, chronological history for a unit:
-      - stock changes (add/remove/used) with user, time, quantity delta
-      - tag link / unlink events with user and time
+    Return the NFC history of a unit, most recent first, read from NFCEvent:
+      - created: unit creation (initial quantity, tag UID if linked at creation)
+      - stock: quantity change (a consumption is reported as a stock change to 0)
+      - link / unlink: tag link and unlink events
     """
 
     permission_classes: ClassVar = [permissions.IsAuthenticated]
@@ -1096,73 +1091,48 @@ class NFCHistoryView(APIView):
     def get(self, request, stock_item_id, *args, **kwargs):
         from stock.models import StockItem
 
-        from .models import NFCTagLink
-
         item = StockItem.objects.filter(pk=stock_item_id).first()
         if not item:
             return Response({"found": False, "events": []})
 
-        events = []
-
-        # Everything is read from StockItemTracking — one consistent source.
-        # Entry kinds are distinguished by their delta keys / notes:
-        #   created  -> unit creation (who + when + initial quantity)
-        #   nfc_link -> a tag was linked from the Tag page
-        #   nfc_unlink -> a tag was unlinked
-        #   otherwise -> a stock quantity change (add/remove/consume)
-        try:
-            from stock.models import StockItemTracking
-
-            for tr in (
-                StockItemTracking.objects.filter(item=item)
-                .select_related("user")
-                .order_by("-date")
-            ):
-                deltas = tr.deltas or {}
-                when = tr.date.isoformat() if tr.date else None
-                who = tr.user.username if tr.user else None
-
-                if deltas.get("created"):
-                    events.append({
-                        "type": "created",
-                        "when": when,
-                        "who": who,
-                        "quantity": deltas.get("quantity"),
-                        "notes": tr.notes,
-                    })
-                elif deltas.get("nfc_link"):
-                    events.append({
-                        "type": "link",
-                        "when": when,
-                        "who": who,
-                        "uid": deltas.get("nfc_link"),
-                    })
-                elif deltas.get("nfc_unlink"):
-                    events.append({
-                        "type": "unlink",
-                        "when": when,
-                        "who": who,
-                        "uid": deltas.get("nfc_unlink"),
-                    })
-                else:
-                    change = (
-                        deltas.get("added")
-                        if deltas.get("added") is not None
-                        else (
-                            -deltas.get("removed")
-                            if deltas.get("removed") is not None
-                            else None
-                        )
-                    )
-                    events.append({
-                        "type": "stock",
-                        "when": when,
-                        "who": who,
-                        "notes": tr.notes,
-                        "quantity": deltas.get("quantity"),
-                        "added": change,
-                    })
-        except Exception:
-            pass
+        events = [
+            _serialize_event(ev)
+            for ev in item.nfc_events.select_related("user").order_by("-date", "-pk")
+        ]
 
         return Response({"found": True, "events": events})
+
+
+def _serialize_event(event):
+    """Serialize an NFCEvent in the history format consumed by the panel.
+
+    A "consumed" event is exposed as a "stock" event (negative change, quantity 0)
+    so that the panel renders it without knowing the extra kind.
+    """
+    from .models import NFCEvent
+
+    data = {
+        "type": event.kind,
+        "when": event.date.isoformat() if event.date else None,
+        "who": event.user.username if event.user else None,
+    }
+
+    if event.kind in (NFCEvent.KIND_LINK, NFCEvent.KIND_UNLINK):
+        data["uid"] = event.uid
+    elif event.kind == NFCEvent.KIND_CREATED:
+        data["quantity"] = _as_number(event.quantity)
+        data["notes"] = event.notes
+        if event.uid:
+            data["uid"] = event.uid
+    else:
+        data["type"] = "stock"
+        data["quantity"] = _as_number(event.quantity)
+        data["added"] = _as_number(event.delta)
+        data["notes"] = event.notes
+
+    return data
+
+
+def _as_number(value):
+    """Convert a Decimal to a float for JSON output, keeping None."""
+    return None if value is None else float(value)

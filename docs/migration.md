@@ -2,8 +2,13 @@
 
 Your InvenTree server is already working. Run these commands on the Debian server.
 
-Repository: `https://github.com/Wassim-dxdydz/InvenTree`
-Plugin folder in repository: `NFC/`
+Repository: `https://github.com/Romb38/inventree-nfc-plugin` (public, no credentials needed)
+Required InvenTree version: **1.7.0 or newer** (plugin 0.2.x)
+
+> Upgrading a server that still runs InvenTree 1.5.x with the plugin installed
+> from the old `Wassim-dxdydz/InvenTree` fork? Follow
+> [Upgrade from InvenTree 1.5.x to 1.7.3](#upgrade-from-inventree-15x-to-173)
+> instead: the order of the steps matters.
 
 ---
 
@@ -56,10 +61,10 @@ Open the plugin list:
 nano /opt/inventree/data/plugins.txt
 ```
 
-Add this line at the bottom:
+Add this **single** line at the bottom, pinned on the release tag to install:
 
 ```text
-git+https://github.com/Wassim-dxdydz/InvenTree.git#subdirectory=NFC
+inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.2.0
 ```
 
 Save in nano:
@@ -71,13 +76,13 @@ Ctrl+O  → Enter  → Ctrl+X
 Check the result:
 
 ```bash
-cat /opt/inventree/data/plugins.txt
+grep -i nfc /opt/inventree/data/plugins.txt
 ```
 
-You must see:
+You must see exactly one line:
 
 ```text
-git+https://github.com/Wassim-dxdydz/InvenTree.git#subdirectory=NFC
+inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.2.0
 ```
 
 ---
@@ -90,7 +95,7 @@ Run from `/opt/inventree`:
 docker compose run --rm inventree-server invoke update
 ```
 
-Wait until it finishes. This reads `plugins.txt` and installs the plugin from GitHub.
+Wait until it finishes. This reads `plugins.txt`, installs the plugin from GitHub and applies the database migrations (InvenTree's and the plugin's).
 
 If it succeeds, continue.
 
@@ -133,6 +138,8 @@ Also check that InvenTree installed the package:
 docker compose exec inventree-server pip list | grep -i nfc
 ```
 
+If the logs mention the plugin version requirement, the server runs InvenTree older than 1.7.0: upgrade InvenTree first (see below).
+
 ---
 
 ## 8. NFC reader agent — separate workstation step
@@ -142,24 +149,90 @@ The plugin runs on the company server. The USB NFC reader does not.
 On each employee Linux computer that has the USB NFC reader connected:
 
 ```bash
-git clone https://github.com/Wassim-dxdydz/InvenTree.git
-cd InvenTree/NFC/agent
-```
-
-Then run your agent installation and start commands:
-
-```bash
-bash install.sh
+git clone https://github.com/Romb38/inventree-nfc-plugin.git
+cd inventree-nfc-plugin/agent
+pip install -r requirements.txt
 python agent.py
 ```
 
-The browser on that same computer communicates with its local agent at `127.0.0.1` to read NFC tags.
+The browser on that same computer communicates with its local agent at `127.0.0.1` to read NFC tags. See `docs/installation.md` to run the agent as a service.
+
+---
+
+## Upgrade from InvenTree 1.5.x to 1.7.3
+
+InvenTree 1.7.0 removed its legacy stock tracking table, which plugin 0.1.x
+wrote its history into. Plugin 0.2.0 keeps its own history and, during the
+upgrade, copies the existing NFC history into it. Follow these steps **in this
+order**, with a single `invoke update` at the end:
+
+1. **Back up** the database and media (mandatory — InvenTree's 1.7 stock
+   migrations are one-way):
+
+   ```bash
+   cd /opt/inventree
+   docker compose run --rm inventree-server invoke backup
+   ```
+
+   Keep a copy of the backup folder and of `.env` and `plugins.txt` outside the server.
+
+2. **Publish the plugin release**: the `v0.2.0` tag must exist on
+   `Romb38/inventree-nfc-plugin` before the server installs it.
+
+3. **Switch the plugin source** in `/opt/inventree/data/plugins.txt`: remove
+   every line pointing to `Wassim-dxdydz/InvenTree` (there may be two
+   duplicated lines) and add the single line:
+
+   ```text
+   inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.2.0
+   ```
+
+4. **Switch the InvenTree version** in `/opt/inventree/.env`:
+
+   ```text
+   INVENTREE_TAG=1.7.3
+   ```
+
+5. **Pull the images and update once**:
+
+   ```bash
+   docker compose pull
+   docker compose run --rm inventree-server invoke update
+   docker compose up -d
+   ```
+
+   The update applies InvenTree's migrations, then the plugin's
+   `nfc.0007_nfcevent` and `nfc.0008_backfill_nfcevent`. The latter prints how
+   many history events it copied.
+
+6. **Check**: the plugin is active in **Settings → Plugins**, scanning a tag
+   works, the history of an existing unit shows its past events, and removing
+   stock from a unit succeeds.
+
+The package name (`inventree-nfc`), plugin slug (`nfc`) and Django app are
+unchanged, so the existing NFC tags and links are kept as they are.
+
+### Rollback
+
+There is no rollback through migrations: InvenTree 1.7 has dropped the legacy
+tracking table. To go back to 1.5.1, put back `INVENTREE_TAG=1.5.1` in `.env`
+and the previous `plugins.txt`, then restore the backup from step 1 with the
+1.5.1 image:
+
+```bash
+cd /opt/inventree
+docker compose down
+docker compose pull
+docker compose run --rm inventree-server invoke restore
+docker compose up -d
+```
 
 ---
 
 ## Updating the plugin later
 
-After you push a new plugin version to GitHub, run on the server:
+Push the new version with a new tag (e.g. `v0.2.1`), change the tag at the end
+of the line in `plugins.txt`, then run on the server:
 
 ```bash
 cd /opt/inventree
