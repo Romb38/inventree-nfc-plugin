@@ -907,12 +907,17 @@ class NFCCreateItemView(APIView):
             )
 
         batch = str(d.get("batch", "")).strip()
-        serial = str(d.get("serial", "")).strip()
         expiry_date = d.get("expiry_date") or None
         received_date = d.get("received_date") or None
         location_id = d.get("location_id")
-        uid = str(d.get("uid", "")).strip().upper()
         container_type = str(d.get("container_type", "")).strip()
+
+        # Tags: accept a single "uid" or a list "uids". Each tag => one unit.
+        raw_uids = d.get("uids")
+        if not raw_uids:
+            single = str(d.get("uid", "")).strip()
+            raw_uids = [single] if single else []
+        uids = [str(u).strip().upper() for u in raw_uids if str(u).strip()]
 
         # Container is required per unit, and must be valid for the part's form.
         part_info = _serialize_part(part)
@@ -950,21 +955,22 @@ class NFCCreateItemView(APIView):
 
         behaviour, _unit = _container_behaviour(container_type)
 
-        # Ampoules (whole-unit behaviour) require a unit number (serial).
-        if behaviour == "whole" and not serial:
+        # Location is now required for every unit.
+        if not location_id:
             return Response(
-                {
-                    "error": "This is an ampoule (whole unit) — a unit number (serial) is required."
-                },
+                {"error": "Location is required."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Reject a tag that is already linked to another active unit, before
-        # creating anything — otherwise we'd silently create the unit untagged.
-        if uid and NFCTagLink.objects.filter(uid=uid, active=True).exists():
+        # Reject any tag already linked, before creating anything.
+        conflict = [
+            u for u in uids
+            if NFCTagLink.objects.filter(uid=u, active=True).exists()
+        ]
+        if conflict:
             return Response(
                 {
-                    "error": f"Tag {uid} is already linked to another unit. Use a different tag or unlink it first."
+                    "error": f"These tags are already linked: {', '.join(conflict)}."
                 },
                 status=status.HTTP_409_CONFLICT,
             )
@@ -987,56 +993,73 @@ class NFCCreateItemView(APIView):
         if behaviour == "whole":
             quantity = Decimal(1)
 
+        # How many units to create: one per tag, or a single untagged unit.
+        create_uids = uids if uids else [None]
+
+        created = []
         with transaction.atomic():
             location = None
             if location_id:
                 location = StockLocation.objects.filter(pk=location_id).first()
-
-            stock_item = StockItem.objects.create(
-                part=part,
-                quantity=quantity,
-                batch=batch or "",
-                serial=serial or None,
-                location=location,
-                expiry_date=expiry_date,
-            )
-
-            # Keep depleted units as "out of stock" records (never auto-delete).
-            if getattr(stock_item, "delete_on_deplete", False):
-                stock_item.delete_on_deplete = False
-
-            meta_update = {"container_type": container_type}
-            if received_date:
-                meta_update["received_date"] = received_date
-            stock_item.metadata = {**(stock_item.metadata or {}), **meta_update}
-            stock_item.save()
-
-            # Record a creation event so it appears in the unit's history.
-            try:
-                from stock.models import StockItemTracking
-
-                StockItemTracking.objects.create(
-                    item=stock_item,
-                    user=request.user,
-                    notes=f"NFC: unit created ({container_type})",
-                    deltas={"quantity": float(stock_item.quantity), "created": True},
+            if not location:
+                return Response(
+                    {"error": "Location not found."},
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-            except Exception:
-                pass
-
-            tag_linked = False
-            if uid:
-                NFCTagLink.objects.create(
-                    uid=uid, stock_item=stock_item, linked_by=request.user, active=True
+            if getattr(location, "structural", False):
+                return Response(
+                    {
+                        "error": "This location is structural (a folder), so stock can't be placed there. Choose a real sub-location."
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
                 )
-                tag_linked = True
+
+            for one_uid in create_uids:
+                stock_item = StockItem.objects.create(
+                    part=part,
+                    quantity=quantity,
+                    batch=batch or "",
+                    location=location,
+                    expiry_date=expiry_date,
+                )
+
+                if getattr(stock_item, "delete_on_deplete", False):
+                    stock_item.delete_on_deplete = False
+
+                meta_update = {"container_type": container_type}
+                if received_date:
+                    meta_update["received_date"] = received_date
+                stock_item.metadata = {**(stock_item.metadata or {}), **meta_update}
+                stock_item.save()
+
+                try:
+                    from stock.models import StockItemTracking
+
+                    StockItemTracking.objects.create(
+                        item=stock_item,
+                        user=request.user,
+                        notes=f"NFC: unit created ({container_type})",
+                        deltas={"quantity": float(stock_item.quantity), "created": True},
+                    )
+                except Exception:
+                    pass
+
+                if one_uid:
+                    NFCTagLink.objects.create(
+                        uid=one_uid,
+                        stock_item=stock_item,
+                        linked_by=request.user,
+                        active=True,
+                    )
+
+                created.append({"stock_item_id": stock_item.pk, "uid": one_uid})
 
         return Response({
             "success": True,
             "part_id": part.pk,
             "part_name": part.name,
-            "stock_item_id": stock_item.pk,
-            "tag_linked": tag_linked,
+            "created_count": len(created),
+            "created": created,
         })
 
 

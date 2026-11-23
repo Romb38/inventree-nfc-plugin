@@ -21,113 +21,70 @@ import { IconCheck, IconWifi } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { playSound } from './sound';
 import { getEffectiveConfig } from './agentConfig';
+import {
+  createItem,
+  createProduct,
+  fetchLocations,
+  fetchPartInfo,
+  fetchParts,
+  findByTag
+} from './api';
+import type { PartOption } from './types';
+import { scanOnce } from './agent';
+import { useReaderStatus } from './hooks';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-interface ScanResult {
-  uid?: string;
-  error?: string;
-}
-
-interface PartOption {
-  value: string; // part id as string
-  label: string; // part name
-}
-
-async function getReaderConnected(agentBaseUrl: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${agentBaseUrl}/health`);
-    if (!res.ok) return false;
-    const data = await res.json();
-    return !!data.reader_connected;
-  } catch {
-    return false;
+/**
+ * Extract a human-readable message from any DRF/InvenTree error payload:
+ * a plain string, { error: "..." }, or { field: ["msg", ...] }.
+ */
+function extractError(err: any, fallback: string): string {
+  const data = err?.response?.data;
+  if (!data) return fallback;
+  if (typeof data === 'string') return data;
+  if (typeof data.error === 'string') return data.error;
+  // Field-keyed errors like { location: ["..."] } or { detail: "..." }
+  const parts: string[] = [];
+  for (const key of Object.keys(data)) {
+    const val = data[key];
+    if (Array.isArray(val)) parts.push(val.join(' '));
+    else if (typeof val === 'string') parts.push(val);
   }
+  return parts.length ? parts.join(' — ') : fallback;
 }
 
-async function scanOnce(agentBaseUrl: string, timeoutSeconds: number): Promise<string> {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), (timeoutSeconds + 2) * 1000);
-  try {
-    const res = await fetch(`${agentBaseUrl}/scan/once`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ timeout: timeoutSeconds }),
-      signal: controller.signal
-    });
-    const data: ScanResult = await res.json().catch(() => ({}));
-    if (res.ok && data.uid) return data.uid;
-    throw new Error(data.error ?? `http_${res.status}`);
-  } finally {
-    clearTimeout(timer);
-  }
-}
+/**
+ * Parse a month/year string in any of: mm-yyyy, mm/yyyy, yyyy-mm, yyyy/mm.
+ * Returns { ym: 'YYYY-MM' } on success, { error } when invalid, {} when empty.
+ * Month must be between 01 and 12.
+ */
+function parseMonthYear(input: string): { ym?: string; error?: string } {
+  const s = (input || '').trim();
+  if (!s) return {};
 
-// Reader status dot (color only, no text).
-// Month + year picker. Value is stored as 'YYYY-MM' (or '' when incomplete).
-// Month is a fixed 1–12 dropdown (can't be invalid); year is an editable
-// number. The user can click to choose or type the year directly.
-function MonthYearPicker({
-  label,
-  value,
-  onChange
-}: {
-  label: string;
-  value: string; // 'YYYY-MM' or ''
-  onChange: (v: string) => void;
-}) {
-  const [yearStr, monthStr] = value && value.includes('-')
-    ? value.split('-')
-    : ['', ''];
-
-  const months = [
-    { value: '01', label: t`01 - January` },
-    { value: '02', label: t`02 - February` },
-    { value: '03', label: t`03 - March` },
-    { value: '04', label: t`04 - April` },
-    { value: '05', label: t`05 - May` },
-    { value: '06', label: t`06 - June` },
-    { value: '07', label: t`07 - July` },
-    { value: '08', label: t`08 - August` },
-    { value: '09', label: t`09 - September` },
-    { value: '10', label: t`10 - October` },
-    { value: '11', label: t`11 - November` },
-    { value: '12', label: t`12 - December` }
-  ];
-
-  function emit(y: string, m: string) {
-    if (y && m) onChange(`${y}-${m}`);
-    else onChange('');
+  const parts = s.split(/[-/]/);
+  if (parts.length !== 2 || parts.some((p) => !/^\d+$/.test(p))) {
+    return { error: 'Use mm-yyyy, mm/yyyy, yyyy-mm or yyyy/mm.' };
   }
 
-  return (
-    <div>
-      <Text size='sm' fw={500} mb={2}>{label}</Text>
-      <Text size='xs' c='dimmed' mb={4}>{t`mm-yyyy`}</Text>
-      <Group gap='xs' grow>
-        <Select
-          placeholder={t`Month`}
-          data={months}
-          value={monthStr || null}
-          searchable
-          onChange={(m) => emit(yearStr, m || '')}
-        />
-        <NumberInput
-          placeholder={t`Year`}
-          min={2000}
-          max={2100}
-          value={yearStr ? Number(yearStr) : ''}
-          hideControls
-          onChange={(y) => {
-            const yy = y ? String(y) : '';
-            emit(yy, monthStr);
-          }}
-        />
-      </Group>
-    </div>
-  );
+  let year: number;
+  let month: number;
+  if (parts[0].length === 4) {
+    year = Number(parts[0]);
+    month = Number(parts[1]);
+  } else if (parts[1].length === 4) {
+    month = Number(parts[0]);
+    year = Number(parts[1]);
+  } else {
+    return { error: 'Year must have 4 digits (e.g. 2027).' };
+  }
+
+  if (month < 1 || month > 12) return { error: 'Month must be between 01 and 12.' };
+  if (year < 2000 || year > 2100) return { error: 'Year must be between 2000 and 2100.' };
+  return { ym: `${year}-${String(month).padStart(2, '0')}` };
 }
 
 function ReaderDot({ connected }: { connected: boolean | null }) {
@@ -150,36 +107,7 @@ function ReaderDot({ connected }: { connected: boolean | null }) {
   );
 }
 
-// Hook: poll reader connection every 3s.
-function useReaderStatus(context: InvenTreePluginContext) {
-  const [connected, setConnected] = useState<boolean | null>(null);
-  useEffect(() => {
-    let active = true;
-    let timer: number;
-    let agentUrl: string | null = null;
 
-    async function poll() {
-      try {
-        // Fetch config only once; the agent URL doesn't change.
-        if (!agentUrl) {
-          const cfg = await getEffectiveConfig(context.api);
-          agentUrl = cfg.agent_base_url;
-        }
-        const ok = await getReaderConnected(agentUrl!);
-        if (active) setConnected(ok);
-      } catch {
-        if (active) setConnected(false);
-      }
-      if (active) timer = window.setTimeout(poll, 5000);
-    }
-    poll();
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [context.api]);
-  return connected;
-}
 
 // ---------------------------------------------------------------------------
 // CREATE PART form
@@ -214,14 +142,13 @@ export function CreatePartForm({
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     try {
-      const res = await context.api.post('/plugin/nfc/create-product/', {
+      const data = await createProduct(context.api, {
         molecule: molecule.trim(),
         dosage: dosage.trim(),
         form,
         laboratory: laboratory.trim(),
         add_unit: false // Part-only; the unit (with its container) is created in the Item tab.
       });
-      const data = res.data;
       notifications.show({
         title: data.reused_existing_part ? t`Product already exists` : t`Product created`,
         message: data.reused_existing_part
@@ -243,7 +170,7 @@ export function CreatePartForm({
     } catch (err: any) {
       notifications.show({
         title: t`Creation failed`,
-        message: err?.response?.data?.error ?? t`Could not create the product.`,
+        message: extractError(err, t`Could not create the product.`),
         color: 'red'
       });
     } finally {
@@ -377,13 +304,8 @@ export function CreateItemForm({
   // Load parts.
   useEffect(() => {
     let active = true;
-    context.api
-      .get('/api/part/?limit=500&ordering=name')
-      .then((r) => {
-        const results = r.data?.results ?? r.data ?? [];
-        if (active)
-          setParts(results.map((p: any) => ({ value: String(p.pk), label: p.name })));
-      })
+    fetchParts(context.api)
+      .then((opts) => active && setParts(opts))
       .catch(() => active && setParts([]));
     return () => {
       active = false;
@@ -393,18 +315,8 @@ export function CreateItemForm({
   // Load stock locations.
   useEffect(() => {
     let active = true;
-    context.api
-      .get('/api/stock/location/?limit=500&ordering=name')
-      .then((r) => {
-        const results = r.data?.results ?? r.data ?? [];
-        if (active)
-          setLocations(
-            results.map((l: any) => ({
-              value: String(l.pk),
-              label: l.pathstring || l.name
-            }))
-          );
-      })
+    fetchLocations(context.api)
+      .then((opts) => active && setLocations(opts))
       .catch(() => active && setLocations([]));
     return () => {
       active = false;
@@ -427,11 +339,10 @@ export function CreateItemForm({
       return;
     }
     let active = true;
-    context.api
-      .get(`/plugin/nfc/part-info/${partId}/`)
-      .then((r) => {
+    fetchPartInfo(context.api, partId)
+      .then((data) => {
         if (!active) return;
-        const f = r.data?.form ?? null;
+        const f = data?.form ?? null;
         setPartForm(f);
         if (f === 'Poudre') setContainer('Flacon poudre');
         else setContainer(null);
@@ -468,8 +379,8 @@ export function CreateItemForm({
       }
       // Already linked to another unit?
       try {
-        const check = await context.api.get(`/plugin/nfc/tag/${scanned}/`);
-        if (check.data?.found) {
+        const check = await findByTag(context.api, scanned);
+        if (check?.found) {
           playSound(cfg.sound_enabled, 'error');
           notifications.show({
             title: t`Tag already in use`,
@@ -504,35 +415,42 @@ export function CreateItemForm({
     if (!ready || submitting) return;
     if (!container) return;
 
-    // Past-expiry warning (expiry is YYYY-MM; compare to current month).
-    if (expiry.trim()) {
-      const nowMonth = new Date().toISOString().slice(0, 7);
-      if (expiry.trim() < nowMonth) {
-        if (!window.confirm(t`This expiry date has already passed. Continue anyway?`))
-          return;
-      }
-    }
-
     setSubmitting(true);
     try {
-      // Dates are month inputs (YYYY-MM); store as first day of month.
-      // Accept either 'YYYY-MM' (native month input) or 'MM-YYYY' (typed) and
-      // normalize to the first day of that month for the backend date field.
-      const toDate = (v: string): string | null => {
-        const s = v.trim();
-        if (!s) return null;
-        let year: string, month: string;
-        if (/^\d{4}-\d{2}$/.test(s)) {
-          [year, month] = s.split('-');
-        } else if (/^\d{2}-\d{4}$/.test(s)) {
-          [month, year] = s.split('-');
-        } else {
-          return null; // unrecognized -> treat as empty
+      // Parse & validate the month/year fields (4 formats, month 01–12).
+      const expiryParsed = parseMonthYear(expiry);
+      if (expiryParsed.error) {
+        notifications.show({
+          title: t`Invalid expiry date`,
+          message: expiryParsed.error,
+          color: 'red'
+        });
+        setSubmitting(false);
+        return;
+      }
+      const receivedParsed = parseMonthYear(received);
+      if (receivedParsed.error) {
+        notifications.show({
+          title: t`Invalid reception date`,
+          message: receivedParsed.error,
+          color: 'red'
+        });
+        setSubmitting(false);
+        return;
+      }
+      const expiryDate = expiryParsed.ym ? `${expiryParsed.ym}-01` : null;
+      const receivedDate = receivedParsed.ym ? `${receivedParsed.ym}-01` : null;
+
+      // Past-expiry warning (compare parsed YYYY-MM to the current month).
+      if (expiryParsed.ym) {
+        const nowMonth = new Date().toISOString().slice(0, 7);
+        if (expiryParsed.ym < nowMonth) {
+          if (!window.confirm(t`This expiry date has already passed. Continue anyway?`)) {
+            setSubmitting(false);
+            return;
+          }
         }
-        return `${year}-${month}-01`;
-      };
-      const expiryDate = toDate(expiry);
-      const receivedDate = toDate(received);
+      }
 
       const body: Record<string, any> = {
         part_id: Number(partId),
@@ -550,11 +468,11 @@ export function CreateItemForm({
         uids: tags // may be empty -> creates a single untagged unit
       };
 
-      const res = await context.api.post('/plugin/nfc/create-item/', body);
-      const n = res.data?.created_count ?? 0;
+      const data = await createItem(context.api, body);
+      const n = data?.created_count ?? 0;
       notifications.show({
         title: n > 1 ? t`Units created` : t`Unit created`,
-        message: `${res.data.part_name ?? ''} — ${n}`,
+        message: `${data.part_name ?? ''} — ${n}`,
         color: 'green'
       });
       // Reset per-unit fields, keep the part selected.
@@ -566,7 +484,7 @@ export function CreateItemForm({
     } catch (err: any) {
       notifications.show({
         title: t`Creation failed`,
-        message: err?.response?.data?.error ?? t`Could not create the unit(s).`,
+        message: extractError(err, t`Could not create the unit(s).`),
         color: 'red'
       });
     } finally {
@@ -649,15 +567,19 @@ export function CreateItemForm({
               onChange={setQuantity}
             />
           )}
-          <MonthYearPicker
+          <TextInput
             label={t`Expiry`}
+            description={t`mm-yyyy, mm/yyyy, yyyy-mm or yyyy/mm`}
+            placeholder='mm-yyyy'
             value={expiry}
-            onChange={setExpiry}
+            onChange={(e) => setExpiry(e.currentTarget.value)}
           />
-          <MonthYearPicker
+          <TextInput
             label={t`Reception`}
+            description={t`mm-yyyy, mm/yyyy, yyyy-mm or yyyy/mm`}
+            placeholder='mm-yyyy'
             value={received}
-            onChange={setReceived}
+            onChange={(e) => setReceived(e.currentTarget.value)}
           />
 
           {/* Multiple tags — one unit will be created per tag */}
@@ -726,7 +648,6 @@ export function CreateItemForm({
     </Stack>
   );
 }
-
 
 // ---------------------------------------------------------------------------
 // CREATE TABS — container holding both forms with cross-tab handoff.

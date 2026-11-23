@@ -186,6 +186,71 @@ This guide covers the most common issues you may encounter when using the InvenT
 3. Restart the InvenTree server if needed.
 4. Clear the browser cache if the old UI still appears.
 
+## History is always empty
+
+### Symptoms
+
+- "Show history" opens but shows nothing, even for units that were just created
+  or had stock removed.
+
+### Possible causes
+
+- The history URL route is not registered in the plugin.
+- You are looking at a unit that had no actions since history recording went
+  live.
+
+### Fix
+
+1. Confirm the history route is registered in `core.py` (a `history/<int:...>/`
+   path pointing to `NFCHistoryView`) and restart the server.
+2. Test with a fresh action: create a new unit or remove some stock, then open
+   its history. History only contains events recorded from when the code went
+   live onward; older units may look sparse.
+3. In the browser, check the network call to `/plugin/nfc/history/<id>/`. A 404
+   means the route is missing; a 200 with an empty list means there are simply
+   no recorded events yet.
+
+## "Location is structural" when creating a unit
+
+### Symptoms
+
+- Creating a unit fails with a message about the location being structural, or a
+  raw error mentioning structural stock locations.
+
+### Cause
+
+- The chosen stock location is marked **structural** in InvenTree. Structural
+  locations are organisational folders and cannot physically hold stock.
+
+### Fix
+
+1. Pick a non-structural location (a real sub-location). The create form only
+   lists non-structural locations, so this normally cannot happen from the UI.
+2. In InvenTree, either un-mark the location as structural or create a real
+   sub-location under it and use that.
+
+## Settings show unreadable codes (like Uak6D6)
+
+### Symptoms
+
+- The settings labels show short random-looking codes instead of words.
+
+### Cause
+
+- A part of the UI is rendering outside the translation provider, or the
+  translation catalog is stale.
+
+### Fix
+
+1. Make sure the settings view is wrapped in the localization provider (the same
+   wrapper used by the panel).
+2. Rebuild translations and the frontend:
+   ```bash
+   npm run extract
+   npm run compile
+   npm run build
+   ```
+
 ## Useful checks
 
 These commands are useful when debugging NFC issues:

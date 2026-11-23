@@ -29,6 +29,7 @@ def client_no_reader():
         app.config["TESTING"]=True
         with app.test_client() as c: yield c
 
+# Check the health endpoint while the reader is available.
 def test_health_reader_connected(client):
     with patch("agent.agent.readers", return_value = [MagicMock()]):
         res = client.get("/health")
@@ -38,6 +39,7 @@ def test_health_reader_connected(client):
     assert data["status"] == "ok"
     assert data["reader_connected"] is True
 
+# Check that the health endpoint reports a missing reader correctly.
 def test_health_no_reader(client):
     with patch("agent.agent.readers", return_value = []):
         res = client.get("/health")
@@ -46,6 +48,7 @@ def test_health_no_reader(client):
     data = res.get_json()
     assert data["reader_connected"] is False
 
+# Ensure the agent returns the UID when a tag is scanned before the timeout expires.
 def test_scan_once_returns_uid(client):
     """
     Agent unblocks immediately when a tag UID is pre-set in state.
@@ -67,6 +70,7 @@ def test_scan_once_returns_uid(client):
         assert res.status_code == 200
         assert res.get_json()["uid"] == "AABBCCDD"
 
+# Confirm the agent returns a timeout response when no tag is seen in time.
 def test_scan_once_timeout(client):
     """
     Agent returns timeout error when no tag is scanned within the window.
@@ -76,6 +80,7 @@ def test_scan_once_timeout(client):
     assert res.status_code == 408
     assert res.get_json()["error"] == "timeout"
 
+# Check that the agent surfaces a readable error when no NFC reader is attached.
 def test_scan_once_no_reader(client):
     """
     Agent returns error 503 when no reader is plugged in.
@@ -86,6 +91,7 @@ def test_scan_once_no_reader(client):
         assert res.status_code == 503
         assert res.get_json()["error"] == "no_reader"
 
+# Confirm the scan endpoint falls back to the built-in default timeout if not provided.
 def test_scan_once_default_timeout(client):
     """
     Agent accepts missing timeout body and defaults to 30s.

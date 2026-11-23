@@ -1,7 +1,14 @@
 {
-  "_CreateForms-hjJyHADS.js": {
-    "file": "assets/CreateForms-hjJyHADS.js",
+  "_CreateForms-CJOJdufO.js": {
+    "file": "assets/CreateForms-CJOJdufO.js",
     "name": "CreateForms",
+    "imports": [
+      "_agentConfig-Dr0OC9Vq.js"
+    ]
+  },
+  "_Settings-CDkwINCT.js": {
+    "file": "assets/Settings-CDkwINCT.js",
+    "name": "Settings",
     "imports": [
       "_agentConfig-Dr0OC9Vq.js"
     ]
@@ -10,38 +17,34 @@
     "file": "assets/agentConfig-Dr0OC9Vq.js",
     "name": "agentConfig"
   },
-  "_locale-Cq1S-kxx.js": {
-    "file": "assets/locale-Cq1S-kxx.js",
-    "name": "locale"
-  },
   "src/Dashboard.tsx": {
-    "file": "Dashboard-DGnJ8xQ1.js",
+    "file": "Dashboard-Ce4puFfq.js",
     "name": "Dashboard",
     "src": "src/Dashboard.tsx",
     "isEntry": true,
     "imports": [
-      "_CreateForms-hjJyHADS.js",
+      "_CreateForms-CJOJdufO.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },
   "src/Panel.tsx": {
-    "file": "Panel-7hGyReD5.js",
+    "file": "Panel-AhmAiWbL.js",
     "name": "Panel",
     "src": "src/Panel.tsx",
     "isEntry": true,
     "imports": [
-      "_CreateForms-hjJyHADS.js",
-      "_locale-Cq1S-kxx.js",
+      "_CreateForms-CJOJdufO.js",
+      "_Settings-CDkwINCT.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },
   "src/Settings.tsx": {
-    "file": "Settings-DHJlSsyq.js",
+    "file": "Settings-C-AXOE-3.js",
     "name": "Settings",
     "src": "src/Settings.tsx",
     "isEntry": true,
     "imports": [
-      "_locale-Cq1S-kxx.js",
+      "_Settings-CDkwINCT.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },

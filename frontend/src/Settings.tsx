@@ -19,7 +19,7 @@ import {
   writeWorkstationOverrides
 } from './agentConfig';
 
-function PluginSettingsDisplay({
+export function PluginSettingsDisplay({
   context
 }: {
   context: InvenTreePluginContext;

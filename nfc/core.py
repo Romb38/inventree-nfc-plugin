@@ -74,6 +74,7 @@ class NFC(AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugi
             NFCConfigView,
             NFCCreateItemView,
             NFCCreateProductView,
+            NFCHistoryView,
             NFCLinkView,
             NFCPartInfoView,
             NFCStockItemsView,
@@ -86,6 +87,11 @@ class NFC(AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugi
 
         return [
             path("config/", NFCConfigView.as_view(), name="nfc-config"),
+            path(
+                "history/<int:stock_item_id>/",
+                NFCHistoryView.as_view(),
+                name="nfc-history",
+            ),
             path(
                 "create-product/",
                 NFCCreateProductView.as_view(),

@@ -15,18 +15,36 @@ import {
   Loader,
   Modal,
   NumberInput,
+  Paper,
   Stack,
   Text,
   Title
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconAlertTriangle, IconLink, IconMinus, IconTrash, IconWifi } from '@tabler/icons-react';
+import { IconAlertTriangle, IconChevronRight, IconLink, IconMinus, IconTrash, IconWifi } from '@tabler/icons-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { LocalizedComponent } from './locale';
 import { CreateTabs } from './CreateForms';
 import { playSound } from './sound';
 import { getEffectiveConfig } from './agentConfig';
+import {
+  adjustStock,
+  fetchHistory,
+  findByTag,
+  getTagForStockItem,
+  linkTag,
+  unlinkTag
+} from './api';
+import { getAgentHealth, scanOnce } from './agent';
+import type {
+  AgentHealth,
+  NfcConfig,
+  TagByStockResponse,
+  TagLookupResult,
+  Tube
+} from './types';
+import { PluginSettingsDisplay } from './Settings';
 
 // Trim trailing zeros: 65.0000 -> "65", 65.5000 -> "65.5"
 function fmtQty(v: number | string | null | undefined): string {
@@ -36,152 +54,7 @@ function fmtQty(v: number | string | null | undefined): string {
   return String(Number(n));
 }
 
-interface NfcConfig {
-  agent_base_url: string;
-  scan_timeout_seconds: number;
-  auto_redirect: boolean;
-  allow_link_from_scan: boolean;
-  sound_enabled: boolean;
-}
 
-interface TagByStockResponse {
-  found: boolean;
-  uid?: string;
-  stock_item_id?: number;
-  linked_at?: string;
-  linked_by?: string | null;
-}
-
-interface ScanResult {
-  // Agent returns { uid: "AABBCCDD" } on success, or { error: "timeout" | "no_reader" }
-  uid?: string;
-  error?: string;
-}
-
-interface Tube {
-  id: number;
-  serial: string | null;
-  batch: string | null;
-  expiry_date: string | null;
-  received_date: string | null;
-  location: string | null;
-  quantity: number;
-  out_of_stock?: boolean;
-  used_date?: string | null;
-  container_type?: string;
-  behaviour?: 'whole' | 'quantity';
-  unit?: string | null;
-}
-
-interface PartInfo {
-  part_id: number;
-  part_name: string;
-  part_description: string;
-  total_stock: number;
-  parameters: Record<string, string>;
-  form?: string | null;
-}
-
-interface TagLookupResult {
-  found: boolean;
-  uid?: string;
-  part?: PartInfo;
-  scanned_tube?: Tube;
-  sibling_tubes?: Tube[];
-  part_url?: string;
-}
-
-interface AgentHealth {
-  status: 'ok' | 'unreachable';
-  agent_reachable: boolean;
-  reader_connected: boolean;
-  readers?: string[];
-}
-
-class AgentScanError extends Error {
-  code: string;
-
-  constructor(code: string, message?: string) {
-    super(message ?? code);
-    this.code = code;
-  }
-}
-
-async function getAgentHealth(agentBaseUrl: string): Promise<AgentHealth> {
-  try {
-    const res = await fetch(`${agentBaseUrl}/health`);
-
-    if (!res.ok) {
-      return {
-        status: 'unreachable',
-        agent_reachable: false,
-        reader_connected: false,
-        readers: []
-      };
-    }
-
-    const data = await res.json();
-
-    return {
-      status: 'ok',
-      agent_reachable: true,
-      reader_connected: !!data.reader_connected,
-      readers: Array.isArray(data.readers) ? data.readers : []
-    };
-  } catch {
-    return {
-      status: 'unreachable',
-      agent_reachable: false,
-      reader_connected: false,
-      readers: []
-    };
-  }
-}
-
-async function scanOnce(
-  agentBaseUrl: string,
-  timeoutSeconds: number
-): Promise<string> {
-  const controller = new AbortController();
-
-  const timer = window.setTimeout(
-    () => {
-      controller.abort();
-    },
-    (timeoutSeconds + 2) * 1000
-  );
-
-  try {
-    const res = await fetch(`${agentBaseUrl}/scan/once`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ timeout: timeoutSeconds }),
-      signal: controller.signal
-    });
-
-    const data: ScanResult = await res.json().catch(() => ({}));
-
-    if (res.ok && data.uid) {
-      return data.uid;
-    }
-
-    throw new AgentScanError(data.error ?? `http_${res.status}`);
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      throw new AgentScanError('client_timeout');
-    }
-
-    if (err instanceof AgentScanError) {
-      throw err;
-    }
-
-    throw new AgentScanError('network_error');
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 function getScanErrorMessage(code: string): string {
   switch (code) {
@@ -278,10 +151,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
     {
       queryKey: ['nfc-tag-by-stock', stockItemId],
       enabled: !!stockItemId,
-      queryFn: () =>
-        context.api
-          .get(`/plugin/nfc/stock-item-tag/${stockItemId}/`)
-          .then((r) => r.data),
+      queryFn: () => getTagForStockItem(context.api, stockItemId as number),
       staleTime: 60_000
     },
     context.queryClient
@@ -292,8 +162,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
   // Unlink
   const unlinkMutation = useMutation(
     {
-      mutationFn: (uid: string) =>
-        context.api.delete(`/plugin/nfc/link/${uid}/`),
+      mutationFn: (uid: string) => unlinkTag(context.api, uid),
       onSuccess: () => {
         context.queryClient.invalidateQueries({
           queryKey: ['nfc-tag-by-stock', stockItemId]
@@ -331,7 +200,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
         config.scan_timeout_seconds
       );
 
-      await context.api.post('/plugin/nfc/link/', { uid, stock_item_id: stockItemId });
+      await linkTag(context.api, uid, stockItemId as number);
 
       context.queryClient.invalidateQueries({
         queryKey: ['nfc-tag-by-stock', stockItemId]
@@ -393,8 +262,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
     }
 
     try {
-      const res = await context.api.get(`/plugin/nfc/tag/${uid}/`);
-      const data: TagLookupResult = res.data;
+      const data: TagLookupResult = await findByTag(context.api, uid);
       setFindResult(data);
 
       if (data.found && config.auto_redirect && data.part_url) {
@@ -428,8 +296,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
         config.scan_timeout_seconds
       );
 
-      const res = await context.api.get(`/plugin/nfc/tag/${uid}/`);
-      const data: TagLookupResult = res.data;
+      const data: TagLookupResult = await findByTag(context.api, uid);
       setFindResult(data);
       if (data.found) {
         setAdjustQty(1);
@@ -477,14 +344,21 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
             response: { data: { error: 'Scan a unit first.' } }
           });
         }
+        // Build a single request body (typed so both branches match).
+        const body: {
+          uid: string;
+          stock_item_id: number;
+          quantity: number;
+          action: string;
+        } = {
+          uid: findResult.uid,
+          stock_item_id: scannedTube.id,
+          quantity: scannedTube.quantity,
+          action: 'remove'
+        };
         if (vars.action === 'consume') {
           // Whole unit: remove its entire current quantity.
-          return context.api.post('/plugin/nfc/stock/', {
-            uid: findResult.uid,
-            stock_item_id: scannedTube.id,
-            quantity: scannedTube.quantity,
-            action: 'remove'
-          });
+          return adjustStock(context.api, body);
         }
         const qty = typeof adjustQty === 'string' ? parseFloat(adjustQty) : adjustQty;
         if (!qty || qty <= 0) {
@@ -492,16 +366,13 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
             response: { data: { error: 'Enter an amount greater than 0.' } }
           });
         }
-        return context.api.post('/plugin/nfc/stock/', {
-          uid: findResult.uid,
-          stock_item_id: scannedTube.id,
-          quantity: qty,
-          action: vars.action
-        });
+        body.quantity = qty;
+        body.action = vars.action;
+        return adjustStock(context.api, body);
       },
       onSuccess: (res, vars) => {
-        const nowOut = !!res.data.out_of_stock;
-        const changed = res.data.quantity_changed;
+        const nowOut = !!res.out_of_stock;
+        const changed = res.quantity_changed;
         const unit = scannedTube?.unit ? ` ${scannedTube.unit}` : '';
         playSound(config!.sound_enabled, 'success');
         notifications.show({
@@ -511,8 +382,8 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
               : t`Stock removed`,
           message:
             vars.action === 'consume'
-              ? `${res.data.part_name}`
-              : `${t`Removed`} ${changed}${unit} · ${t`Remaining:`} ${fmtQty(res.data.new_stock)}${unit}`,
+              ? `${res.part_name}`
+              : `${t`Removed`} ${changed}${unit} · ${t`Remaining:`} ${fmtQty(res.new_stock)}${unit}`,
           color: 'green'
         });
         // If this action brought the unit to zero, announce out of stock.
@@ -529,9 +400,9 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
             ...findResult,
             scanned_tube: {
               ...scannedTube,
-              quantity: res.data.new_stock,
+              quantity: res.new_stock,
               out_of_stock: nowOut,
-              used_date: res.data.used_date ?? scannedTube.used_date
+              used_date: res.used_date ?? scannedTube.used_date
             }
           });
         }
@@ -819,7 +690,6 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                               }
                               description={`${t`Remaining:`} ${fmtQty(findResult.scanned_tube?.quantity)}${findResult.scanned_tube?.unit ? ` ${findResult.scanned_tube?.unit}` : ''}`}
                               min={0}
-                              max={findResult.scanned_tube?.quantity}
                               value={adjustQty}
                               onChange={setAdjustQty}
                             />
@@ -848,9 +718,10 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                                   return;
                                 }
                                 if (qty > tube.quantity) {
+                                  const u = tube.unit ? ` ${tube.unit}` : '';
                                   notifications.show({
-                                    title: t`Too much`,
-                                    message: t`You can't remove more than what remains.`,
+                                    title: t`Amount too high`,
+                                    message: `${t`You can't remove more than what remains. Only`} ${fmtQty(tube.quantity)}${u} ${t`available — choose a lower amount.`}`,
                                     color: 'red'
                                   });
                                   return;
@@ -908,10 +779,11 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                             }
                             setHistoryLoading(true);
                             try {
-                              const r = await context.api.get(
-                                `/plugin/nfc/history/${findResult.scanned_tube?.id}/`
+                              const data = await fetchHistory(
+                                context.api,
+                                findResult.scanned_tube?.id as number
                               );
-                              setHistory(r.data?.events ?? []);
+                              setHistory(data?.events ?? []);
                             } catch {
                               setHistory([]);
                             } finally {
@@ -964,32 +836,60 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                       {/* ZONE 3 — sibling tubes (read-only) */}
                       {findResult.sibling_tubes && findResult.sibling_tubes.length > 0 && (
                         <div>
-                          <Text size='xs' fw={600} c='dimmed' mb={4}>
-                            {t`Other tubes of this product`}
+                          <Text size='xs' fw={600} c='dimmed' mb={6} tt='uppercase'>
+                            {t`Other units of this product`} ({findResult.sibling_tubes.length})
                           </Text>
-                          <Stack gap={4}>
+                          <Stack gap={6}>
                             {findResult.sibling_tubes.map((s) => (
-                              <Box
+                              <Paper
                                 key={s.id}
+                                withBorder
+                                radius='md'
+                                p='xs'
                                 onClick={() => setTubeToVisit(s)}
-                                style={{
-                                  border: '1px solid var(--mantine-color-gray-4)',
-                                  borderRadius: 6,
-                                  padding: 6,
-                                  cursor: 'pointer'
+                                style={{ cursor: 'pointer', transition: 'background-color 120ms' }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor =
+                                    'var(--mantine-color-gray-0)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = '';
                                 }}
                               >
-                                <Text size='xs'>
-                                  {[
-                                    s.serial ? `${t`Unit`} ${s.serial}` : null,
-                                    s.batch ? `${t`Lot`} ${s.batch}` : null,
-                                    s.expiry_date ? `${t`Exp`} ${s.expiry_date}` : null,
-                                    s.location ?? null
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                </Text>
-                              </Box>
+                                <Group justify='space-between' wrap='nowrap' gap='xs'>
+                                  <Group gap={6} wrap='wrap' style={{ flex: 1 }}>
+                                    {s.serial && (
+                                      <Badge size='sm' variant='light' color='blue'>
+                                        {t`Unit`} {s.serial}
+                                      </Badge>
+                                    )}
+                                    {s.batch && (
+                                      <Badge size='sm' variant='light' color='gray'>
+                                        {t`Lot`} {s.batch}
+                                      </Badge>
+                                    )}
+                                    {s.expiry_date && (
+                                      <Badge size='sm' variant='light' color='orange'>
+                                        {t`Exp`} {s.expiry_date}
+                                      </Badge>
+                                    )}
+                                    {s.location && (
+                                      <Badge size='sm' variant='light' color='teal'>
+                                        {s.location}
+                                      </Badge>
+                                    )}
+                                    {s.out_of_stock && (
+                                      <Badge size='sm' variant='filled' color='red'>
+                                        {t`Out of stock`}
+                                      </Badge>
+                                    )}
+                                  </Group>
+                                  <IconChevronRight
+                                    size={16}
+                                    style={{ color: 'var(--mantine-color-gray-5)', flexShrink: 0 }}
+                                  />
+                                </Group>
+                              </Paper>
                             ))}
                           </Stack>
                         </div>
@@ -1045,6 +945,19 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
             </Accordion.Panel>
           </Accordion.Item>
         )}
+
+        {/* Agent settings (this workstation) — available to ALL users, since
+            the agent config is machine-specific and stored in the browser. */}
+        <Accordion.Item value='agent-settings'>
+          <Accordion.Control>
+            <Title c={context.theme.primaryColor} order={4}>
+              {t`Agent settings (this workstation)`}
+            </Title>
+          </Accordion.Control>
+          <Accordion.Panel>
+            <PluginSettingsDisplay context={context} />
+          </Accordion.Panel>
+        </Accordion.Item>
       </Accordion>
     </>
   );

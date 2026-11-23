@@ -167,4 +167,4 @@ docker compose run --rm inventree-server invoke update
 docker compose restart inventree-server inventree-worker
 ```
 
-Do not run `pip install` manually inside a Docker container; container-only changes disappear when the container is recreated. `plugins.txt` is the persistent installation source. InvenTree supports Docker plugin installation through `plugins.txt` in the external data directory. [web:43][web:42]
+Do not run `pip install` manually inside a Docker container; container-only changes disappear when the container is recreated. `plugins.txt` is the persistent installation source. InvenTree supports Docker plugin installation through `plugins.txt` in the external data directory.

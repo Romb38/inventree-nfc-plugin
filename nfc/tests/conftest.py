@@ -57,3 +57,14 @@ def nfc_link_factory(db, stock_item_factory):
         return NFCTagLink.objects.create(uid=uid, stock_item=stock_item, active=active)
 
     return make_link
+
+
+@pytest.fixture
+def location_factory(db):
+    """Create a StockLocation."""
+    from stock.models import StockLocation
+
+    def make_location(name="Test Location"):
+        return StockLocation.objects.create(name=name, description="Test")
+
+    return make_location

@@ -22,25 +22,14 @@ import { useCallback, useState } from 'react';
 import { CreateTabs } from './CreateForms';
 import { playSound } from './sound';
 import { getEffectiveConfig } from './agentConfig';
+import { getAgentHealth, scanOnce } from './agent';
+import type { AgentHealth } from './types';
 
 interface NfcConfig {
   agent_base_url: string;
   scan_timeout_seconds: number;
   auto_redirect: boolean;
   sound_enabled: boolean;
-}
-
-interface AgentHealth {
-  status: 'ok' | 'unreachable';
-  agent_reachable: boolean;
-  reader_connected: boolean;
-  readers?: string[];
-}
-
-interface ScanResult {
-  // Agent returns { uid: "AABBCCDD" } on success, or { error: "timeout" | "no_reader" }
-  uid?: string;
-  error?: string;
 }
 
 interface TagLookupResult {
@@ -52,90 +41,6 @@ interface TagLookupResult {
   part_url?: string;
 }
 
-class AgentScanError extends Error {
-  code: string;
-
-  constructor(code: string, message?: string) {
-    super(message ?? code);
-    this.code = code;
-  }
-}
-
-async function getAgentHealth(agentBaseUrl: string): Promise<AgentHealth> {
-  try {
-    const res = await fetch(`${agentBaseUrl}/health`);
-
-    if (!res.ok) {
-      return {
-        status: 'unreachable',
-        agent_reachable: false,
-        reader_connected: false,
-        readers: []
-      };
-    }
-
-    const data = await res.json();
-
-    return {
-      status: 'ok',
-      agent_reachable: true,
-      reader_connected: !!data.reader_connected,
-      readers: Array.isArray(data.readers) ? data.readers : []
-    };
-  } catch {
-    return {
-      status: 'unreachable',
-      agent_reachable: false,
-      reader_connected: false,
-      readers: []
-    };
-  }
-}
-
-async function scanOnce(
-  agentBaseUrl: string,
-  timeoutSeconds: number
-): Promise<string> {
-  const controller = new AbortController();
-
-  const timer = window.setTimeout(
-    () => {
-      controller.abort();
-    },
-    (timeoutSeconds + 2) * 1000
-  );
-
-  try {
-    const res = await fetch(`${agentBaseUrl}/scan/once`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ timeout: timeoutSeconds }),
-      signal: controller.signal
-    });
-
-    const data: ScanResult = await res.json().catch(() => ({}));
-
-    if (res.ok && data.uid) {
-      return data.uid;
-    }
-
-    throw new AgentScanError(data.error ?? `http_${res.status}`);
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      throw new AgentScanError('client_timeout');
-    }
-
-    if (err instanceof AgentScanError) {
-      throw err;
-    }
-
-    throw new AgentScanError('network_error');
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 function getScanErrorMessage(code: string): string {
   switch (code) {

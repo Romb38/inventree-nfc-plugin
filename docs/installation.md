@@ -7,19 +7,18 @@ This guide explains how to set up the InvenTree NFC plugin development environme
 The project is organized as a single repository with three main components:
 
 ```
-NFC/
+nfc/                     # repository / plugin root
 ├── agent/               # Local NFC agent (communicates with the USB reader)
 │   ├── agent.py
 │   └── requirements.txt
-├── docs/                # Documentation
-├── frontend/            # React
+├── frontend/            # React frontend source (built into nfc/static/)
 ├── nfc/                 # Python plugin package
 │   ├── migrations/
 │   ├── static/          # Compiled frontend assets are placed here
 │   ├── tests/
 │   ├── admin.py
 │   ├── apps.py
-│   ├── core.py          # Plugin entry point (NFC class)
+│   ├── core.py          # Plugin entry point (NFC class) + URL routes
 │   ├── models.py
 │   ├── nfc_reader.py
 │   └── views.py
@@ -27,9 +26,9 @@ NFC/
 └── MANIFEST.in
 ```
 
-- **`nfc/`** is the Django/InvenTree plugin package. The entry point is `nfc.core:NFC`.
+- **`nfc/nfc/`** is the Django/InvenTree plugin package. The entry point is `nfc.core:NFC`.
 - **`frontend/`** holds the frontend source. Build output is copied into `nfc/static/`.
-- **`agent/`** is a standalone local process that reads from the USB NFC hardware and communicates with InvenTree.
+- **`agent/`** is a standalone local process that reads from the USB NFC hardware and is called by the browser on each workstation.
 This guide is written for a Linux development machine and an InvenTree devcontainer-based workflow.
 
 ## Prerequisites
@@ -227,9 +226,30 @@ Install the system packages and Python libraries needed for NFC/PCSC communicati
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y libpcsclite-dev pcscd pcsc-tools libccid usbutils
+sudo apt-get install -y libpcsclite-dev libpcsclite1 pcscd pcsc-tools libccid usbutils
 pip install pyscard
 ```
+
+`pyscard` is a C extension, so it needs the Python development headers to
+compile. Install the `-dev` package that **matches your Python version**:
+
+```bash
+# check your Python version first
+python3 --version
+
+# then install the matching headers, e.g. for Python 3.13 on Debian 13:
+sudo apt-get install -y python3.13-dev
+# (on Debian 12 this would be python3.11-dev, etc.)
+```
+
+If `pip install pyscard` fails with a compilation error mentioning missing
+headers (for example `Python.h: No such file or directory`), the matching
+`python3.X-dev` package is what's missing.
+
+> Package notes: `libpcsclite-dev` provides the headers to build `pyscard`,
+> `libpcsclite1` is the runtime library it needs to run, and `pcscd` is the
+> PC/SC daemon that talks to the reader. On Debian 13 the tested set was
+> `python3.13-dev pcscd libpcsclite1` plus `libpcsclite-dev` for building.
 
 ## Set up the agent
 
@@ -247,7 +267,63 @@ If you also need `nfcpy` or `cryptnoxpy` support:
 pip install nfcpy cryptnoxpy
 ```
 
+## Run the agent on a Windows workstation
+
+The agent also runs on Windows. The NFC reader works through the built-in
+**Windows Smart Card service** (no extra driver needed for a standard PC/SC
+reader), and the agent can be kept running as a Windows service with
+[NSSM](https://nssm.cc/) (the "Non-Sucking Service Manager").
+
+This is the setup tested on a Windows workstation:
+
+1. **Install Python 3.13** (from python.org), making sure "Add python to PATH"
+   is checked.
+
+2. **Copy the agent folder** to a simple location, e.g. `C:\agent\`
+   (containing `agent.py` and `requirements.txt`).
+
+3. **Create a virtualenv inside the folder and install dependencies:**
+
+   ```bat
+   cd C:\agent
+   python -m venv venv
+   venv\Scripts\activate
+   pip install -r requirements.txt
+   ```
+
+4. **Test it runs** (with the reader plugged in):
+
+   ```bat
+   venv\Scripts\python.exe C:\agent\agent.py
+   ```
+
+   It should serve `http://127.0.0.1:8765`. Stop it with Ctrl+C once confirmed.
+
+5. **Install it as an always-on service with NSSM.** Download NSSM, then from an
+   Administrator command prompt point it at the virtualenv's Python with
+   `agent.py` as the argument:
+
+   ```bat
+   nssm install NFCAgent C:\agent\venv\Scripts\python.exe C:\agent\agent.py
+   nssm set NFCAgent AppDirectory C:\agent
+   nssm start NFCAgent
+   ```
+
+   The agent now starts automatically with the workstation and stays alive in
+   the background. Manage it with `nssm restart NFCAgent`, `nssm stop NFCAgent`,
+   or `nssm remove NFCAgent confirm` to uninstall.
+
+6. **Verify** by opening `http://127.0.0.1:8765/health` in the browser on that
+   workstation — it should return a JSON status showing the reader.
+
+> The reader driver: a standard USB PC/SC reader is handled by the Windows
+> Smart Card service automatically. If the reader is not detected, make sure the
+> "Smart Card" service is running (`services.msc`).
+
 ## Start the PC/SC service
+
+> The following PC/SC steps are for **Linux** workstations. On Windows the Smart
+> Card service handles this automatically (see the Windows section above).
 
 Make sure the PC/SC daemon is running before you test the reader:
 
