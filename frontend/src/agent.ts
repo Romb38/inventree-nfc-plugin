@@ -61,14 +61,24 @@ export async function getReaderConnected(agentBaseUrl: string): Promise<boolean>
 
 /**
  * Ask the agent to wait for a single tag and return its UID.
- * Throws AgentScanError with a code ('timeout', 'no_reader', 'client_timeout',
- * 'network_error', ...) on failure.
+ * Throws AgentScanError with a code ('timeout', 'no_reader', 'cancelled',
+ * 'client_timeout', 'network_error', ...) on failure. Aborting `signal`
+ * rejects with code 'cancelled'.
  */
 export async function scanOnce(
   agentBaseUrl: string,
-  timeoutSeconds: number
+  timeoutSeconds: number,
+  signal?: AbortSignal
 ): Promise<string> {
   const controller = new AbortController();
+  let cancelledByCaller = false;
+
+  const onCallerAbort = () => {
+    cancelledByCaller = true;
+    controller.abort();
+  };
+  if (signal?.aborted) onCallerAbort();
+  signal?.addEventListener('abort', onCallerAbort);
 
   const timer = window.setTimeout(
     () => {
@@ -96,7 +106,7 @@ export async function scanOnce(
     throw new AgentScanError(data.error ?? `http_${res.status}`);
   } catch (err: any) {
     if (err?.name === 'AbortError') {
-      throw new AgentScanError('client_timeout');
+      throw new AgentScanError(cancelledByCaller ? 'cancelled' : 'client_timeout');
     }
 
     if (err instanceof AgentScanError) {
@@ -106,5 +116,15 @@ export async function scanOnce(
     throw new AgentScanError('network_error');
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener('abort', onCallerAbort);
+  }
+}
+
+/** Ask the agent to cancel the scan currently waiting. Never throws. */
+export async function cancelScan(agentBaseUrl: string): Promise<void> {
+  try {
+    await fetch(`${agentBaseUrl}/scan/cancel`, { method: 'POST' });
+  } catch {
+    /* agent unreachable or too old: the browser-side abort is enough */
   }
 }

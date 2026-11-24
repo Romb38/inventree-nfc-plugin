@@ -3,9 +3,9 @@
  */
 
 import type { InvenTreePluginContext } from '@inventreedb/ui';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getEffectiveConfig } from './agentConfig';
-import { getReaderConnected } from './agent';
+import { cancelScan, getReaderConnected, scanOnce } from './agent';
 
 /**
  * Poll the local agent every 5s and report whether a reader is connected.
@@ -44,4 +44,52 @@ export function useReaderStatus(
   }, [context.api]);
 
   return connected;
+}
+/**
+ * Start and stop scans on the local agent.
+ *
+ * `start` resolves with the scanned UID, or null when the scan was stopped by
+ * the user (no error to report). Other failures reject with an AgentScanError.
+ * `stop` aborts the browser request and asks the agent to cancel its scan.
+ * Starting a new scan stops the previous one first.
+ */
+export function useAgentScan(): {
+  scanning: boolean;
+  start: (agentBaseUrl: string, timeoutSeconds: number) => Promise<string | null>;
+  stop: () => void;
+} {
+  const [scanning, setScanning] = useState(false);
+  const current = useRef<{ controller: AbortController; url: string } | null>(null);
+
+  const stop = useCallback(() => {
+    const active = current.current;
+    if (!active) return;
+    current.current = null;
+    active.controller.abort();
+    cancelScan(active.url);
+  }, []);
+
+  const start = useCallback(
+    async (agentBaseUrl: string, timeoutSeconds: number) => {
+      stop();
+      const controller = new AbortController();
+      const handle = { controller, url: agentBaseUrl };
+      current.current = handle;
+      setScanning(true);
+      try {
+        return await scanOnce(agentBaseUrl, timeoutSeconds, controller.signal);
+      } catch (err: any) {
+        if (err?.code === 'cancelled') return null;
+        throw err;
+      } finally {
+        if (current.current === handle) current.current = null;
+        if (current.current === null) setScanning(false);
+      }
+    },
+    [stop]
+  );
+
+  useEffect(() => stop, [stop]);
+
+  return { scanning, start, stop };
 }

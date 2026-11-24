@@ -59,7 +59,7 @@ The plugin has three parts:
 ```
 nfc/
 ├── agent/                  # Local NFC agent (runs on each workstation)
-│   ├── agent.py            # Flask app: /health and /scan/once, talks to PC/SC
+│   ├── agent.py            # Flask app: /health, /scan/once, /scan/cancel (PC/SC)
 │   └── requirements.txt
 ├── frontend/               # React UI (built into nfc/static/)
 │   └── src/
@@ -85,8 +85,10 @@ into `nfc/static/`, which InvenTree serves.
 
 ### Data model
 
-- A **Part** is a precise product (molecule + laboratory + dosage + form), e.g.
-  "Paracétamol B. Braun 10 mg/ml Solution".
+- A **Part** is a precise product (drug name + molecule + laboratory +
+  mass/concentration + form), e.g. "Doliprane Paracétamol B. Braun 10 mg/ml
+  Solution". Its nature, excipients and other fields are part parameters; its
+  manufacturer is an InvenTree manufacturer company.
 - A **StockItem** is one physical unit of that product, with its own lot,
   expiry, reception date, location, quantity and **container type**.
 - An **NFCTagLink** links one tag UID to one StockItem. A tag maps to a single
@@ -97,8 +99,8 @@ into `nfc/static/`, which InvenTree serves.
   by the plugin independently from InvenTree's own stock history.
 
 Container types drive behaviour: **Ampoule** (whole unit, consumed at once),
-**Poche** (bag, tracked in mL) and **Flacon poudre** (powder vial, tracked in
-mg).
+**Poche** (bag, tracked in mL), **Flacon Solution** (solution vial, tracked in
+mg) and **Flacon poudre** (powder vial, tracked in mg).
 
 ---
 
@@ -110,7 +112,7 @@ There are two things to install: the **plugin** (once, on the server) and the
 
 ### Plugin (server)
 
-Requires **InvenTree 1.7.0 or newer** (plugin 0.2.x). The plugin refuses to
+Requires **InvenTree 1.7.0 or newer** (plugin 0.2.0 and later). The plugin refuses to
 activate on older versions.
 
 On the machine running InvenTree via Docker, from the folder that holds
@@ -118,7 +120,7 @@ On the machine running InvenTree via Docker, from the folder that holds
 persistent plugin list (`plugins.txt` in the `INVENTREE_EXT_VOLUME` folder):
 
 ```text
-inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.2.0
+inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.3.0
 ```
 
 Then install it into the containers:

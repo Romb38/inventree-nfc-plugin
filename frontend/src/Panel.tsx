@@ -21,7 +21,15 @@ import {
   Title
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconAlertTriangle, IconChevronRight, IconLink, IconMinus, IconTrash, IconWifi } from '@tabler/icons-react';
+import {
+  IconAlertTriangle,
+  IconChevronRight,
+  IconLink,
+  IconMinus,
+  IconPlayerStop,
+  IconTrash,
+  IconWifi
+} from '@tabler/icons-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { LocalizedComponent } from './locale';
@@ -36,7 +44,8 @@ import {
   linkTag,
   unlinkTag
 } from './api';
-import { getAgentHealth, scanOnce } from './agent';
+import { getAgentHealth } from './agent';
+import { useAgentScan } from './hooks';
 import type {
   AgentHealth,
   NfcConfig,
@@ -55,6 +64,12 @@ function fmtQty(v: number | string | null | undefined): string {
 }
 
 
+
+/** Format a 'YYYY-MM' or 'YYYY-MM-DD' date as 'MM/YYYY' (other values unchanged). */
+function formatMonthYear(value: string | null | undefined): string {
+  const match = /^(\d{4})-(\d{2})/.exec(value ?? '');
+  return match ? `${match[2]}/${match[1]}` : (value ?? '');
+}
 
 function getScanErrorMessage(code: string): string {
   switch (code) {
@@ -184,20 +199,20 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
   );
 
   // Link Scan
-  const [linkScanning, setLinkScanning] = useState(false);
+  const linkScan = useAgentScan();
+  const linkScanning = linkScan.scanning;
 
   const startLinkScan = useCallback(async () => {
     if (!config || !stockItemId || linkScanning) return;
 
-    setLinkScanning(true);
-
     try {
       playSound(config.sound_enabled, 'click');
 
-      const uid = await scanOnce(
+      const uid = await linkScan.start(
         config.agent_base_url,
         config.scan_timeout_seconds
       );
+      if (uid === null) return;
 
       await linkTag(context.api, uid, stockItemId as number);
 
@@ -231,10 +246,8 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
             ? 'yellow'
             : 'red'
       });
-    } finally {
-      setLinkScanning(false);
     }
-  }, [config, stockItemId, linkScanning, context.api, context.queryClient]);
+  }, [config, stockItemId, linkScanning, linkScan, context.api, context.queryClient]);
 
   /**const [findScanning, setFindScanning] = useState(false);
   const [findResult, setFindResult] = useState<TagLookupResult | null>(null);
@@ -279,21 +292,22 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
   }, [config, context.api, context.navigate]);**/
 
   // Find scan
-  const [findScanning, setFindScanning] = useState(false);
+  const findScan = useAgentScan();
+  const findScanning = findScan.scanning;
   const [findResult, setFindResult] = useState<TagLookupResult | null>(null);
 
   const startFindScan = useCallback(async () => {
     if (!config || findScanning) return;
 
-    setFindScanning(true);
     setFindResult(null);
 
     try {
       playSound(config.sound_enabled, 'click');
-      const uid = await scanOnce(
+      const uid = await findScan.start(
         config.agent_base_url,
         config.scan_timeout_seconds
       );
+      if (uid === null) return;
 
       const data: TagLookupResult = await findByTag(context.api, uid);
       setFindResult(data);
@@ -320,10 +334,8 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
             ? 'yellow'
             : 'red'
       });
-    } finally {
-      setFindScanning(false);
     }
-  }, [config, findScanning, context.api, context.navigate]);
+  }, [config, findScanning, findScan, context.api, context.navigate]);
 
   // Stock adjust: the scanned tube is the target (no picker).
   const [adjustQty, setAdjustQty] = useState<number | string>(1);
@@ -556,21 +568,31 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                       {t`No NFC tag linked to this tube.`}
                     </Text>
 
-                    <Button
-                      color={context.theme.primaryColor}
-                      disabled={!canScan}
-                      leftSection={
-                        linkScanning ? (
-                          <Loader size={14} color='white' />
-                        ) : (
-                          <IconLink size={16} />
-                        )
-                      }
-                      loading={linkScanning}
-                      onClick={startLinkScan}
-                    >
-                      {linkScanning ? t`Waiting for tag...` : t`Link NFC Tag`}
-                    </Button>
+                    {linkScanning ? (
+                      <Button
+                        color='red'
+                        variant='light'
+                        leftSection={<IconPlayerStop size={16} />}
+                        onClick={linkScan.stop}
+                      >
+                        {t`Stop scan`}
+                      </Button>
+                    ) : (
+                      <Button
+                        color={context.theme.primaryColor}
+                        disabled={!canScan}
+                        leftSection={<IconLink size={16} />}
+                        onClick={startLinkScan}
+                      >
+                        {t`Link NFC Tag`}
+                      </Button>
+                    )}
+                    {linkScanning && (
+                      <Group gap='xs'>
+                        <Loader size={14} />
+                        <Text size='xs' c='dimmed'>{t`Waiting for tag...`}</Text>
+                      </Group>
+                    )}
                   </>
                 )}
               </Stack>
@@ -586,21 +608,31 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
           </Accordion.Control>
           <Accordion.Panel>
             <Stack gap='sm'>
-              <Button
-                color={context.theme.primaryColor}
-                disabled={!canScan}
-                leftSection={
-                  findScanning ? (
-                    <Loader size={14} color='white' />
-                  ) : (
-                    <IconWifi size={16} />
-                  )
-                }
-                loading={findScanning}
-                onClick={startFindScan}
-              >
-                {findScanning ? t`Waiting for tag...` : t`Scan Tag`}
-              </Button>
+              {findScanning ? (
+                <Button
+                  color='red'
+                  variant='light'
+                  leftSection={<IconPlayerStop size={16} />}
+                  onClick={findScan.stop}
+                >
+                  {t`Stop scan`}
+                </Button>
+              ) : (
+                <Button
+                  color={context.theme.primaryColor}
+                  disabled={!canScan}
+                  leftSection={<IconWifi size={16} />}
+                  onClick={startFindScan}
+                >
+                  {t`Scan Tag`}
+                </Button>
+              )}
+              {findScanning && (
+                <Group gap='xs'>
+                  <Loader size={14} />
+                  <Text size='xs' c='dimmed'>{t`Waiting for tag...`}</Text>
+                </Group>
+              )}
 
               {findResult &&
                 (findResult.found && findResult.scanned_tube && findResult.part ? (
@@ -650,10 +682,10 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                           <Text size='xs'>{t`Lot:`} {findResult.scanned_tube?.batch}</Text>
                         )}
                         {findResult.scanned_tube?.expiry_date && (
-                          <Text size='xs'>{t`Expiry:`} {findResult.scanned_tube?.expiry_date}</Text>
+                          <Text size='xs'>{t`Expiry:`} {formatMonthYear(findResult.scanned_tube?.expiry_date)}</Text>
                         )}
                         {findResult.scanned_tube?.received_date && (
-                          <Text size='xs'>{t`Received:`} {findResult.scanned_tube?.received_date}</Text>
+                          <Text size='xs'>{t`Received:`} {formatMonthYear(findResult.scanned_tube?.received_date)}</Text>
                         )}
                         {findResult.scanned_tube?.location && (
                           <Text size='xs'>{t`Location:`} {findResult.scanned_tube?.location}</Text>
@@ -871,7 +903,7 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                                     )}
                                     {s.expiry_date && (
                                       <Badge size='sm' variant='light' color='orange'>
-                                        {t`Exp`} {s.expiry_date}
+                                        {t`Exp`} {formatMonthYear(s.expiry_date)}
                                       </Badge>
                                     )}
                                     {s.location && (

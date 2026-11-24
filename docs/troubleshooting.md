@@ -104,6 +104,31 @@ This guide covers the most common issues you may encounter when using the InvenT
 3. Confirm the reader is supported and working with `pcsc_scan`.
 4. Check the scan timeout setting in the plugin configuration.
 
+## The reader beeps but the page sees nothing
+
+### Symptoms
+
+- The reader beeps (or its LED blinks) but the scan ends in a timeout.
+
+### Possible causes
+
+- The agent is an old version: a scan abandoned by the browser (page change,
+  restarted scan) could steal the tag meant for the next scan.
+- The UID could not be read (tag removed too quickly, reader busy with
+  `pcsc_scan`).
+
+### Fix
+
+1. Update the agent and restart it (`systemctl restart <service>`, or stop and
+   relaunch `python agent.py`). The current agent keeps a single active scan:
+   a new scan cancels the previous one, and `POST /scan/cancel` (used by the
+   **Stop scan** button) cancels the scan in progress.
+2. Read the agent logs (`journalctl -u <service>` or the console):
+   - `Tag scanned: XXXX` followed by `read while no scan was waiting - ignored`
+     means the tag was presented outside a scan: click **Scan** first.
+   - `UID read failed` or `UID read refused by the tag` means the read itself
+     failed: keep the tag still on the reader, and close `pcsc_scan`.
+
 ## Tag already linked
 
 ### Symptoms

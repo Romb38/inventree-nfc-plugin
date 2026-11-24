@@ -74,6 +74,7 @@ class NFC(AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugi
             NFCCreateProductView,
             NFCHistoryView,
             NFCLinkView,
+            NFCManufacturersView,
             NFCPartInfoView,
             NFCStockItemsView,
             NFCStockView,
@@ -96,6 +97,11 @@ class NFC(AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugi
                 name="nfc-create-product",
             ),
             path("create-item/", NFCCreateItemView.as_view(), name="nfc-create-item"),
+            path(
+                "manufacturers/",
+                NFCManufacturersView.as_view(),
+                name="nfc-manufacturers",
+            ),
             path(
                 "part-info/<int:part_id>/",
                 NFCPartInfoView.as_view(),
@@ -128,22 +134,15 @@ class NFC(AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugi
     # Custom UI panels
     def get_ui_panels(self, request, context: dict, **kwargs):
         """
-        Show the NFC panel on Part detail, Stock Item, Stock Location,
-        and Stock Item list pages.
+        Show the NFC panel on the Part detail, Stock Item detail and Parts index pages.
+
+        Stock location pages do not get the panel: units are neither created
+        nor scanned from a location.
         """
 
         panels = []
 
-        # Panels render only where InvenTree calls this hook. Confirmed via the
-        # plugin panel API: the Parts index calls it with 'partcategory', and
-        # detail pages call it with their model. The STOCK INDEX page does NOT
-        # call this hook at all, so the panel cannot appear in the Stock sidebar.
-        allowed = [
-            "part",  # part detail page
-            "stockitem",  # single tube (stock item) detail page
-            "stocklocation",  # stock location detail page
-            "partcategory",  # parts index page (Parts sidebar entry)
-        ]
+        allowed = ("part", "stockitem", "partcategory")
 
         if context.get("target_model") in allowed:
             panels.append({

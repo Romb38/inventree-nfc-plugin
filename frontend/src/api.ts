@@ -93,6 +93,12 @@ export async function createItem(api: any, body: Record<string, any>) {
   return r.data;
 }
 
+/** Names of the manufacturer companies, for the product form suggestions. */
+export async function fetchManufacturers(api: any): Promise<string[]> {
+  const r = await api.get(`${BASE}/manufacturers/`);
+  return r.data?.results ?? [];
+}
+
 /** Load selectable parts for the create form. */
 export async function fetchParts(api: any): Promise<PartOption[]> {
   const r = await api.get('/api/part/?limit=500&ordering=name');

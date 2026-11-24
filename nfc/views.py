@@ -101,13 +101,27 @@ def _change_stock(stock_item, action, quantity, user, notes):
     return NFCEvent.KIND_CONSUMED, -quantity
 
 
+CONTAINER_TYPES = ("Ampoule", "Poche", "Flacon Solution", "Flacon poudre")
+
+ALLOWED_CONTAINERS_BY_FORM = {
+    "Solution": ("Ampoule", "Poche", "Flacon Solution"),
+    "Poudre": ("Flacon poudre",),
+}
+
+MAX_UNITS_PER_REQUEST = 100
+
+
 def _container_behaviour(container_type):
-    """Map a container type to its stock behaviour and unit of measure."""
+    """Map a container type to its stock behaviour and unit of measure.
+
+    Returns:
+        A (behaviour, unit) tuple: behaviour is "whole" (consumed at once,
+        quantity 1) or "quantity" (consumed by amount), unit is "mL", "mg" or None.
+    """
     if container_type == "Poche":
         return "quantity", "mL"
-    if container_type == "Flacon poudre":
+    if container_type in ("Flacon poudre", "Flacon Solution"):
         return "quantity", "mg"
-    # Ampoule (default): consumed whole, no unit of measure.
     return "whole", None
 
 
@@ -143,24 +157,15 @@ def _serialize_tube(stock_item):
 
 def _serialize_part(part):
     """Serialize the shared product (Part) info."""
-    params = {}
-    # Try legacy get_parameters() first
-    try:
-        for p in part.get_parameters():
-            params[p.template.name] = p.data
-    except Exception:
-        pass
-    # Generic common.models.Parameter system (newer InvenTree)
-    if not params:
-        try:
-            from common.models import Parameter
+    from common.models import Parameter
 
-            qs = Parameter.objects.filter(model_id=part.pk).select_related("template")
-            for p in qs:
-                if p.template:
-                    params[p.template.name] = p.data
-        except Exception:
-            pass
+    params = {
+        p.template.name: p.data
+        for p in Parameter.objects.filter(
+            model_type=_part_content_type(), model_id=part.pk
+        ).select_related("template")
+        if p.template
+    }
     return {
         "part_id": part.pk,
         "part_name": part.name,
@@ -564,17 +569,43 @@ class NFCStockItemsView(APIView):
 # ---------------------------------------------------------------------------
 
 # Parameter template names (must match the templates created in Settings).
+PARAM_DRUG_NAME = "Drug name"
 PARAM_MOLECULE = "Molecule (DCI)"
 PARAM_DOSAGE = "Dosage"
 PARAM_FORM = "Form"
 PARAM_LABORATORY = "Laboratory"
-PARAM_CONTAINER = "Container type"
+PARAM_NATURE = "Nature"
+PARAM_EXCIPIENTS = "Excipients"
+
+FORMS = ("Solution", "Poudre")
+NATURES = ("Médicament formulé", "Principe actif")
+EXCIPIENTS_MAX_LENGTH = 500
+PART_NAME_MAX_LENGTH = 100
+
+PARAMETER_TEMPLATES = {
+    PARAM_DRUG_NAME: {"description": "Trade name of the medicine (NFC plugin)"},
+    PARAM_MOLECULE: {"description": "Active substance, INN (NFC plugin)"},
+    PARAM_DOSAGE: {"description": "Mass / concentration (NFC plugin)"},
+    PARAM_FORM: {
+        "description": "Pharmaceutical form (NFC plugin)",
+        "choices": ",".join(FORMS),
+    },
+    PARAM_LABORATORY: {"description": "Laboratory (NFC plugin)"},
+    PARAM_NATURE: {
+        "description": "Formulated medicine or active substance (NFC plugin)",
+        "choices": ",".join(NATURES),
+    },
+    PARAM_EXCIPIENTS: {"description": "Excipients (NFC plugin)"},
+}
 
 
-def _build_part_name(molecule, laboratory, dosage, form):
-    """DCI + laboratory + dosage + form, e.g. 'Paracétamol B. Braun 10 mg/ml Solution'."""
-    parts = [p.strip() for p in (molecule, laboratory, dosage, form) if p and p.strip()]
-    return " ".join(parts)
+def _build_part_name(drug_name, molecule, laboratory, dosage, form):
+    """Build the automatic product name from its non-empty components.
+
+    Example: 'Doliprane Paracétamol B. Braun 10 mg/ml Solution'.
+    """
+    components = (drug_name, molecule, laboratory, dosage, form)
+    return " ".join(c.strip() for c in components if c and c.strip())
 
 
 def _get_or_create_category(name):
@@ -587,91 +618,98 @@ def _get_or_create_category(name):
     return PartCategory.objects.create(name=name, description="Medicines (NFC plugin)")
 
 
-def _get_parameter_models():
+def _part_content_type():
+    """Return the ContentType of InvenTree's Part model."""
+    from django.contrib.contenttypes.models import ContentType
+    from part.models import Part
+
+    return ContentType.objects.get_for_model(Part)
+
+
+def _get_template(name):
+    """Return the parameter template `name`, creating it for parts if missing.
+
+    An existing template is returned unchanged, so administrators keep control
+    over its settings.
     """
-    Newer InvenTree uses a generic parameter system in common.models:
-    Parameter (with model_type/model_id + template + data) and ParameterTemplate.
-    Older versions used part.models.PartParameter/PartParameterTemplate.
-    """
-    import importlib
+    from common.models import ParameterTemplate
 
-    # Newer generic system first
-    try:
-        common = importlib.import_module("common.models")
-        p = getattr(common, "Parameter", None)
-        pt = getattr(common, "ParameterTemplate", None)
-        if p and pt:
-            return ("common", p, pt)
-    except ModuleNotFoundError:
-        pass
+    template = ParameterTemplate.objects.filter(name__iexact=name).first()
+    if template:
+        return template
 
-    # Legacy part-specific system
-    for mod_name in ("part.models", "part.parameter"):
-        try:
-            mod = importlib.import_module(mod_name)
-            p = getattr(mod, "PartParameter", None)
-            pt = getattr(mod, "PartParameterTemplate", None)
-            if p and pt:
-                return ("legacy", p, pt)
-        except ModuleNotFoundError:
-            continue
-
-    return (None, None, None)
+    defaults = PARAMETER_TEMPLATES.get(name, {})
+    return ParameterTemplate.objects.create(
+        name=name,
+        model_type=_part_content_type(),
+        description=defaults.get("description", ""),
+        choices=defaults.get("choices", ""),
+    )
 
 
 def _set_part_parameter(part, template_name, value):
-    """Set a parameter value on a part, matching the template by name."""
+    """Set (create or update) a parameter value on a part.
+
+    Empty values are skipped. The template is created if missing; any other
+    failure is raised so the enclosing transaction is rolled back.
+    """
+    from common.models import Parameter
+
     if value is None or str(value).strip() == "":
         return
 
-    kind, ParamModel, TemplateModel = _get_parameter_models()
-    if not ParamModel:
-        import logging
+    Parameter.objects.update_or_create(
+        model_type=_part_content_type(),
+        model_id=part.pk,
+        template=_get_template(template_name),
+        defaults={"data": str(value).strip()},
+    )
 
-        logging.getLogger("inventree").warning(
-            "NFC: could not locate parameter models; skipping %r", template_name
+
+def _get_or_create_manufacturer(name):
+    """Return the manufacturer company named `name` (case-insensitive), creating it if missing."""
+    from company.models import Company
+
+    company = Company.objects.filter(is_manufacturer=True, name__iexact=name).first()
+    if company:
+        return company
+    return Company.objects.create(
+        name=name,
+        description="Manufacturer (NFC plugin)",
+        is_manufacturer=True,
+        is_supplier=False,
+        is_customer=False,
+    )
+
+
+def _attach_manufacturer(part, name):
+    """Link `part` to the manufacturer named `name` through a ManufacturerPart."""
+    from company.models import ManufacturerPart
+
+    if not name:
+        return None
+    company = _get_or_create_manufacturer(name)
+    ManufacturerPart.objects.get_or_create(part=part, manufacturer=company, MPN=None)
+    return company
+
+
+class NFCManufacturersView(APIView):
+    """
+    GET /manufacturers/
+    Names of the companies flagged as manufacturers, for the product form suggestions.
+    """
+
+    permission_classes: ClassVar = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        from company.models import Company
+
+        names = (
+            Company.objects.filter(is_manufacturer=True)
+            .order_by("name")
+            .values_list("name", flat=True)
         )
-        return
-
-    template = TemplateModel.objects.filter(name=template_name).first()
-    if not template:
-        import logging
-
-        logging.getLogger("inventree").warning(
-            "NFC: parameter template %r not found; create it in Settings.",
-            template_name,
-        )
-        return
-
-    if kind == "common":
-        # Generic parameter. Prefer the GenericForeignKey (content_object),
-        # which sets model_type/model_id correctly regardless of their field types.
-        existing = None
-        try:
-            existing = (
-                ParamModel.objects.filter(template=template)
-                .filter(model_id=part.pk)
-                .first()
-            )
-        except Exception:
-            existing = None
-
-        if existing:
-            existing.data = str(value)
-            existing.save()
-        else:
-            obj = ParamModel(template=template, data=str(value))
-            try:
-                obj.content_object = part
-            except Exception:
-                # Fallback: set model_id directly and let model_type default
-                obj.model_id = part.pk
-            obj.save()
-    else:
-        # Legacy part-specific parameter.
-        ParamModel.objects.update_or_create(
-            part=part, template=template, defaults={"data": str(value)}
-        )
+        return Response({"results": list(names)})
 
 
 class NFCCreateProductView(NFCAPIView):
@@ -703,10 +741,14 @@ class NFCCreateProductView(NFCAPIView):
         from .models import NFCEvent, NFCTagLink, record_event
 
         d = request.data
+        drug_name = str(d.get("drug_name", "")).strip()
         molecule = str(d.get("molecule", "")).strip()
         dosage = str(d.get("dosage", "")).strip()
         form = str(d.get("form", "")).strip()
         laboratory = str(d.get("laboratory", "")).strip()
+        nature = str(d.get("nature", "") or "").strip()
+        manufacturer = str(d.get("manufacturer", "") or "").strip()
+        excipients = str(d.get("excipients", "") or "").strip()
 
         # Product identity requires at least molecule + dosage + form.
         missing = [
@@ -720,13 +762,34 @@ class NFCCreateProductView(NFCAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if form not in ("Solution", "Poudre"):
+        if form not in FORMS:
             return Response(
                 {"error": "Form must be 'Solution' or 'Poudre'."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        name = _build_part_name(molecule, laboratory, dosage, form)
+        if nature and nature not in NATURES:
+            return Response(
+                {"error": f"Nature must be one of: {', '.join(NATURES)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(excipients) > EXCIPIENTS_MAX_LENGTH:
+            return Response(
+                {
+                    "error": f"Excipients must not exceed {EXCIPIENTS_MAX_LENGTH} characters."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        name = _build_part_name(drug_name, molecule, laboratory, dosage, form)
+        if len(name) > PART_NAME_MAX_LENGTH:
+            return Response(
+                {
+                    "error": f"The product name '{name}' exceeds {PART_NAME_MAX_LENGTH} characters. Shorten some fields."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Stock item fields
         batch = str(d.get("batch", "")).strip()
@@ -781,19 +844,16 @@ class NFCCreateProductView(NFCAPIView):
                     active=True,
                 )
                 for tname, tval in (
+                    (PARAM_DRUG_NAME, drug_name),
                     (PARAM_MOLECULE, molecule),
                     (PARAM_DOSAGE, dosage),
                     (PARAM_FORM, form),
                     (PARAM_LABORATORY, laboratory),
+                    (PARAM_NATURE, nature),
+                    (PARAM_EXCIPIENTS, excipients),
                 ):
-                    try:
-                        _set_part_parameter(part, tname, tval)
-                    except Exception as exc:
-                        import logging
-
-                        logging.getLogger("inventree").warning(
-                            "NFC: failed to set parameter %r: %s", tname, exc
-                        )
+                    _set_part_parameter(part, tname, tval)
+                _attach_manufacturer(part, manufacturer)
 
             # Stock item is optional: only create a unit if requested.
             add_unit = bool(d.get("add_unit", True))
@@ -867,17 +927,89 @@ class NFCCreateProductView(NFCAPIView):
         })
 
 
+def _parse_month_date(value, end_of_month):
+    """Parse 'YYYY-MM' (to the first or last day of the month) or 'YYYY-MM-DD'.
+
+    Args:
+        value: The submitted value; empty values give None.
+        end_of_month: True to map 'YYYY-MM' to the last day of the month.
+
+    Returns:
+        A datetime.date, or None when value is empty.
+
+    Raises:
+        ValueError: If value is not a valid month or date.
+    """
+    import calendar
+    import re
+    from datetime import date
+
+    text = str(value or "").strip()
+    if not text:
+        return None
+    month = re.fullmatch(r"(\d{4})-(\d{1,2})", text)
+    if month:
+        year, mon = int(month.group(1)), int(month.group(2))
+        day = calendar.monthrange(year, mon)[1] if end_of_month else 1
+        return date(year, mon, day)
+    return date.fromisoformat(text)
+
+
+def _resolve_location(location_id, location_name):
+    """Return the StockLocation to place new units in.
+
+    A location_id must designate an existing, non-structural location. A
+    location_name designates the root location of that name (case-insensitive),
+    which is created (non-structural, at the root) when missing.
+
+    Raises:
+        NFCActionRefused: If the location is missing, unknown or structural.
+    """
+    from stock.models import StockLocation
+
+    if location_id not in (None, ""):
+        location = StockLocation.objects.filter(pk=location_id).first()
+        if location is None:
+            raise NFCActionRefused("Location not found.")
+    else:
+        name = str(location_name or "").strip()
+        if not name:
+            raise NFCActionRefused("A storage location is required.")
+        if len(name) > 100:
+            raise NFCActionRefused(
+                "The storage location name must not exceed 100 characters."
+            )
+        location = StockLocation.objects.filter(parent=None, name__iexact=name).first()
+        if location is None:
+            return StockLocation.objects.create(
+                name=name,
+                description="Created from the NFC plugin",
+                parent=None,
+                structural=False,
+            )
+
+    if location.structural:
+        raise NFCActionRefused(
+            "This location is structural (a folder), so stock can't be placed there. Choose another location."
+        )
+    return location
+
+
 class NFCCreateItemView(NFCAPIView):
     """
     POST /create-item/
-    Create a stock item (physical unit) for an EXISTING part.
+    Create one or more identical stock items (physical units) for an EXISTING part.
 
     Body:
     {
-      "part_id": 924,
-      "batch": "A12345", "expiry_date": "2027-09-30",
-      "serial": "1", "quantity": 1, "location_id": 5,
-      "uid": "TAG-0001"   # optional, links a tag to the new unit
+      "part_id": 924, "container_type": "Poche",
+      "location_id": 5,                 # or "location_name": "Frigo 2"
+      "count": 3,                       # number of units (default: number of tags, min 1)
+      "uids": ["T1", "", "T2"],         # optional tag per unit, empty = no tag
+      "quantity": 250,                  # contenance per unit (forced to 1 for ampoules)
+      "batch": "A12345",
+      "expiry_date": "2027-09",         # last day of the month, or YYYY-MM-DD
+      "received_date": "2026-11"        # first day of the month, or YYYY-MM-DD
     }
     """
 
@@ -887,7 +1019,7 @@ class NFCCreateItemView(NFCAPIView):
         from decimal import InvalidOperation
 
         from part.models import Part
-        from stock.models import StockItem, StockLocation
+        from stock.models import StockItem
 
         from .models import NFCEvent, NFCTagLink, record_event
 
@@ -907,64 +1039,74 @@ class NFCCreateItemView(NFCAPIView):
             )
 
         batch = str(d.get("batch", "")).strip()
-        expiry_date = d.get("expiry_date") or None
-        received_date = d.get("received_date") or None
-        location_id = d.get("location_id")
         container_type = str(d.get("container_type", "")).strip()
 
-        # Tags: accept a single "uid" or a list "uids". Each tag => one unit.
         raw_uids = d.get("uids")
-        if not raw_uids:
+        if raw_uids is None:
             single = str(d.get("uid", "")).strip()
             raw_uids = [single] if single else []
-        uids = [str(u).strip().upper() for u in raw_uids if str(u).strip()]
+        if not isinstance(raw_uids, (list, tuple)):
+            raise NFCActionRefused("'uids' must be a list.")
+        uids = [str(u or "").strip().upper() for u in raw_uids]
+        tagged = [u for u in uids if u]
 
-        # Container is required per unit, and must be valid for the part's form.
-        part_info = _serialize_part(part)
-        part_form = part_info.get("form")  # "Solution" or "Poudre" (may be None)
-
-        allowed_by_form = {
-            "Solution": ["Ampoule", "Poche"],
-            "Poudre": ["Flacon poudre"],
-        }
+        raw_count = d.get("count")
+        if raw_count in (None, ""):
+            raw_count = max(1, len(tagged))
+        try:
+            count = int(raw_count)
+        except (TypeError, ValueError):
+            raise NFCActionRefused("The number of units must be a whole number.")
+        if not 1 <= count <= MAX_UNITS_PER_REQUEST:
+            raise NFCActionRefused(
+                f"The number of units must be between 1 and {MAX_UNITS_PER_REQUEST}."
+            )
+        if len(tagged) > count:
+            raise NFCActionRefused("There are more tags than units to create.")
+        duplicates = sorted({u for u in tagged if tagged.count(u) > 1})
+        if duplicates:
+            raise NFCActionRefused(
+                f"The same tag is used twice: {', '.join(duplicates)}."
+            )
 
         if not container_type:
-            return Response(
-                {
-                    "error": "Container type is required (Ampoule, Poche, or Flacon poudre)."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+            raise NFCActionRefused(
+                f"Container type is required ({', '.join(CONTAINER_TYPES)})."
             )
-        if container_type not in ("Ampoule", "Poche", "Flacon poudre"):
-            return Response(
-                {"error": "Invalid container type."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        # Enforce form ↔ container consistency when the part has a known form.
-        if (
-            part_form in allowed_by_form
-            and container_type not in allowed_by_form[part_form]
-        ):
-            allowed = ", ".join(allowed_by_form[part_form])
-            return Response(
-                {
-                    "error": f"This product is '{part_form}'. Container must be one of: {allowed}."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
+        if container_type not in CONTAINER_TYPES:
+            raise NFCActionRefused("Invalid container type.")
+        part_form = _serialize_part(part).get("form")
+        allowed = ALLOWED_CONTAINERS_BY_FORM.get(part_form)
+        if allowed and container_type not in allowed:
+            raise NFCActionRefused(
+                f"This product is '{part_form}'. Container must be one of: {', '.join(allowed)}."
             )
 
         behaviour, _unit = _container_behaviour(container_type)
+        if behaviour == "whole":
+            quantity = Decimal(1)
+        else:
+            try:
+                quantity = Decimal(str(d.get("quantity", 1)))
+            except (TypeError, ValueError, InvalidOperation):
+                raise NFCActionRefused("Quantity must be a number.")
+            if not quantity.is_finite() or quantity <= 0:
+                raise NFCActionRefused("Quantity must be greater than 0.")
 
-        # Location is now required for every unit.
-        if not location_id:
-            return Response(
-                {"error": "Location is required."},
-                status=status.HTTP_400_BAD_REQUEST,
+        try:
+            expiry_date = _parse_month_date(d.get("expiry_date"), end_of_month=True)
+            received_date = _parse_month_date(
+                d.get("received_date"), end_of_month=False
+            )
+        except ValueError:
+            raise NFCActionRefused("Dates must be given as YYYY-MM or YYYY-MM-DD.")
+        if expiry_date and received_date and expiry_date < received_date:
+            raise NFCActionRefused(
+                "Expiry date is before the reception date. Please check the dates."
             )
 
-        # Reject any tag already linked, before creating anything.
         conflict = [
-            u for u in uids if NFCTagLink.objects.filter(uid=u, active=True).exists()
+            u for u in tagged if NFCTagLink.objects.filter(uid=u, active=True).exists()
         ]
         if conflict:
             return Response(
@@ -972,46 +1114,13 @@ class NFCCreateItemView(NFCAPIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        # A unit cannot expire before it was received — almost always a typo.
-        if expiry_date and received_date and str(expiry_date) < str(received_date):
-            return Response(
-                {
-                    "error": "Expiry date is before the reception date. Please check the dates."
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            quantity = Decimal(str(d.get("quantity", 1)))
-        except (TypeError, ValueError, InvalidOperation):
-            quantity = Decimal(1)
-
-        # Whole units (ampoules) are always quantity 1.
-        if behaviour == "whole":
-            quantity = Decimal(1)
-
-        # How many units to create: one per tag, or a single untagged unit.
-        create_uids = uids if uids else [None]
+        unit_uids = tagged + [None] * (count - len(tagged))
 
         created = []
         with transaction.atomic():
-            location = None
-            if location_id:
-                location = StockLocation.objects.filter(pk=location_id).first()
-            if not location:
-                return Response(
-                    {"error": "Location not found."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-            if getattr(location, "structural", False):
-                return Response(
-                    {
-                        "error": "This location is structural (a folder), so stock can't be placed there. Choose a real sub-location."
-                    },
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+            location = _resolve_location(d.get("location_id"), d.get("location_name"))
 
-            for one_uid in create_uids:
+            for one_uid in unit_uids:
                 stock_item = StockItem.objects.create(
                     part=part,
                     quantity=quantity,
@@ -1019,13 +1128,11 @@ class NFCCreateItemView(NFCAPIView):
                     location=location,
                     expiry_date=expiry_date,
                 )
-
-                if getattr(stock_item, "delete_on_deplete", False):
-                    stock_item.delete_on_deplete = False
+                stock_item.delete_on_deplete = False
 
                 meta_update = {"container_type": container_type}
                 if received_date:
-                    meta_update["received_date"] = received_date
+                    meta_update["received_date"] = received_date.isoformat()
                 stock_item.metadata = {**(stock_item.metadata or {}), **meta_update}
                 stock_item.save()
 
@@ -1052,6 +1159,8 @@ class NFCCreateItemView(NFCAPIView):
             "success": True,
             "part_id": part.pk,
             "part_name": part.name,
+            "location_id": location.pk,
+            "location_name": location.name,
             "created_count": len(created),
             "created": created,
         })

@@ -732,3 +732,415 @@ def test_create_product_with_unit_records_created(rf, auth_user, location_factor
     assert res.status_code == 200
     [event] = NFCEvent.objects.filter(stock_item_id=res.data["stock_item_id"])
     assert (event.kind, event.uid, event.user_id) == ("created", "F00D", auth_user.pk)
+
+
+# --- product-form-fields ---
+
+
+def _create_product(rf, user, **fields):
+    body = {
+        "molecule": "Paracetamol",
+        "dosage": "10 mg/ml",
+        "form": "Solution",
+        "add_unit": False,
+        **fields,
+    }
+    request = rf.post("/", body, format="json")
+    request.user = user
+    return _call(NFCCreateProductView.as_view(), request)
+
+
+def _part_params(part_id):
+    from django.contrib.contenttypes.models import ContentType
+    from part.models import Part
+
+    from common.models import Parameter
+
+    ct = ContentType.objects.get_for_model(Part)
+    return {
+        p.template.name: p.data
+        for p in Parameter.objects.filter(model_type=ct, model_id=part_id)
+    }
+
+
+@pytest.mark.django_db
+def test_product_name_starts_with_drug_name(rf, auth_user):
+    """The drug name is the first component of the automatic product name."""
+    res = _create_product(rf, auth_user, drug_name="Doliprane", laboratory="B. Braun")
+    assert res.status_code == 200
+    assert res.data["part_name"] == "Doliprane Paracetamol B. Braun 10 mg/ml Solution"
+
+
+@pytest.mark.django_db
+def test_product_parameters_and_templates_created(rf, auth_user):
+    """Missing parameter templates are created and every value is stored."""
+    from common.models import ParameterTemplate
+
+    ParameterTemplate.objects.filter(name__in=["Nature", "Excipients"]).delete()
+    res = _create_product(
+        rf,
+        auth_user,
+        drug_name="Doliprane",
+        laboratory="B. Braun",
+        nature="Médicament formulé",
+        excipients="Mannitol, eau ppi",
+    )
+    assert res.status_code == 200
+    params = _part_params(res.data["part_id"])
+    assert params == {
+        "Drug name": "Doliprane",
+        "Molecule (DCI)": "Paracetamol",
+        "Dosage": "10 mg/ml",
+        "Form": "Solution",
+        "Laboratory": "B. Braun",
+        "Nature": "Médicament formulé",
+        "Excipients": "Mannitol, eau ppi",
+    }
+    assert ParameterTemplate.objects.get(name="Nature").choices == (
+        "Médicament formulé,Principe actif"
+    )
+
+
+@pytest.mark.django_db
+def test_product_invalid_nature(rf, auth_user):
+    """An unknown nature is rejected and no product is created."""
+    from part.models import Part
+
+    res = _create_product(rf, auth_user, nature="Autre")
+    assert res.status_code == 400
+    assert not Part.objects.filter(name__icontains="Paracetamol").exists()
+
+
+@pytest.mark.django_db
+def test_product_excipients_too_long(rf, auth_user):
+    """Excipients longer than 500 characters are rejected."""
+    res = _create_product(rf, auth_user, excipients="x" * 501)
+    assert res.status_code == 400
+
+
+@pytest.mark.django_db
+def test_product_name_too_long(rf, auth_user):
+    """An automatic name over 100 characters is rejected with a clear error."""
+    res = _create_product(rf, auth_user, drug_name="D" * 90)
+    assert res.status_code == 400
+    assert "100" in res.data["error"]
+
+
+@pytest.mark.django_db
+def test_product_manufacturer_created_then_reused(rf, auth_user):
+    """A new manufacturer company is created, then found again case-insensitively."""
+    from company.models import Company, ManufacturerPart
+
+    first = _create_product(rf, auth_user, manufacturer="Fresenius")
+    second = _create_product(
+        rf, auth_user, molecule="Ibuprofen", manufacturer="fresenius"
+    )
+    assert first.status_code == second.status_code == 200
+    companies = Company.objects.filter(name__iexact="fresenius")
+    assert companies.count() == 1
+    assert companies.get().is_manufacturer is True
+    linked = ManufacturerPart.objects.filter(manufacturer=companies.get())
+    assert sorted(mp.part_id for mp in linked) == sorted([
+        first.data["part_id"],
+        second.data["part_id"],
+    ])
+
+
+@pytest.mark.django_db
+def test_existing_product_not_modified(rf, auth_user):
+    """Re-creating an existing product changes neither its parameters nor its manufacturer."""
+    from company.models import ManufacturerPart
+
+    first = _create_product(rf, auth_user, nature="Principe actif")
+    again = _create_product(
+        rf, auth_user, nature="Médicament formulé", manufacturer="Other"
+    )
+    assert again.data["reused_existing_part"] is True
+    assert _part_params(first.data["part_id"])["Nature"] == "Principe actif"
+    assert not ManufacturerPart.objects.filter(part_id=first.data["part_id"]).exists()
+
+
+@pytest.mark.django_db
+def test_manufacturer_suggestions(rf, auth_user):
+    """The suggestions endpoint lists manufacturer companies only, sorted by name."""
+    from company.models import Company
+
+    from nfc.views import NFCManufacturersView
+
+    Company.objects.create(name="Zeta", is_manufacturer=True)
+    Company.objects.create(name="Alpha", is_manufacturer=True)
+    Company.objects.create(name="Supplier only", is_manufacturer=False, is_supplier=True)
+    request = rf.get("/")
+    request.user = auth_user
+    res = _call(NFCManufacturersView.as_view(), request)
+    assert res.data["results"] == ["Alpha", "Zeta"]
+
+
+def _create_item(rf, user, **body):
+    request = rf.post("/", body, format="json")
+    request.user = user
+    return _call(NFCCreateItemView.as_view(), request)
+
+
+def _solution_part(rf, user, form="Solution"):
+    from part.models import Part
+
+    res = _create_product(rf, user, form=form)
+    return Part.objects.get(pk=res.data["part_id"])
+
+
+@pytest.mark.django_db
+def test_flacon_solution_unit_in_mg(rf, auth_user, location_factory):
+    """A 'Flacon Solution' unit keeps its quantity and is managed in mg."""
+    from stock.models import StockItem
+
+    from nfc.views import _serialize_tube
+
+    part = _solution_part(rf, auth_user)
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part.pk,
+        container_type="Flacon Solution",
+        location_id=location_factory().pk,
+        quantity=500,
+    )
+    assert res.status_code == 200
+    item = StockItem.objects.get(pk=res.data["created"][0]["stock_item_id"])
+    tube = _serialize_tube(item)
+    assert (tube["quantity"], tube["unit"], tube["behaviour"]) == (500.0, "mg", "quantity")
+
+
+@pytest.mark.django_db
+def test_flacon_solution_refused_for_powder(rf, auth_user, location_factory):
+    """'Flacon Solution' is refused for a powder product."""
+    part = _solution_part(rf, auth_user, form="Poudre")
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part.pk,
+        container_type="Flacon Solution",
+        location_id=location_factory().pk,
+        quantity=500,
+    )
+    assert res.status_code == 400
+
+
+# --- unit-form-rework ---
+
+
+@pytest.mark.django_db
+def test_unit_new_location_created_at_root(rf, auth_user, part_factory):
+    """An unknown location name creates a root, non-structural location."""
+    from stock.models import StockLocation
+
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part_factory().pk,
+        container_type="Ampoule",
+        location_name="  Frigo 2 ",
+    )
+    assert res.status_code == 200
+    location = StockLocation.objects.get(pk=res.data["location_id"])
+    assert (location.name, location.parent_id, location.structural) == (
+        "Frigo 2",
+        None,
+        False,
+    )
+
+
+@pytest.mark.django_db
+def test_unit_existing_location_reused(rf, auth_user, part_factory):
+    """An existing root location is reused, whatever the case."""
+    from stock.models import StockLocation
+
+    existing = StockLocation.objects.create(name="frigo 2")
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part_factory().pk,
+        container_type="Ampoule",
+        location_name="Frigo 2",
+    )
+    assert res.data["location_id"] == existing.pk
+    assert StockLocation.objects.filter(name__iexact="frigo 2").count() == 1
+
+
+@pytest.mark.django_db
+def test_unit_location_name_with_slash(rf, auth_user, part_factory):
+    """A '/' is part of the location name and creates no sub-level."""
+    from stock.models import StockLocation
+
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part_factory().pk,
+        container_type="Ampoule",
+        location_name="Armoire A / Bac 3",
+    )
+    location = StockLocation.objects.get(pk=res.data["location_id"])
+    assert (location.name, location.parent_id) == ("Armoire A / Bac 3", None)
+    assert StockLocation.objects.filter(name__in=["Armoire A", "Bac 3"]).count() == 0
+
+
+@pytest.mark.django_db
+def test_unit_structural_location_refused(rf, auth_user, part_factory):
+    """A structural root location cannot receive units."""
+    from stock.models import StockItem, StockLocation
+
+    StockLocation.objects.create(name="Pharmacie", structural=True)
+    part = part_factory()
+    res = _create_item(
+        rf, auth_user, part_id=part.pk, container_type="Ampoule", location_name="Pharmacie"
+    )
+    assert res.status_code == 400
+    assert not StockItem.objects.filter(part=part).exists()
+
+
+@pytest.mark.django_db
+def test_unit_location_missing(rf, auth_user, part_factory):
+    """A storage location is required."""
+    res = _create_item(rf, auth_user, part_id=part_factory().pk, container_type="Ampoule")
+    assert res.status_code == 400
+
+
+@pytest.mark.django_db
+def test_unit_count_with_partial_tags(rf, auth_user, part_factory, location_factory):
+    """count=3 with two tags creates three units, two of them tagged."""
+    from nfc.models import NFCTagLink
+
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part_factory().pk,
+        container_type="Ampoule",
+        location_id=location_factory().pk,
+        count=3,
+        uids=["t1", "", "T2"],
+    )
+    assert res.status_code == 200
+    assert res.data["created_count"] == 3
+    assert [c["uid"] for c in res.data["created"]] == ["T1", "T2", None]
+    assert NFCTagLink.objects.filter(active=True).count() == 2
+
+
+@pytest.mark.django_db
+def test_unit_count_defaults_to_tags(rf, auth_user, part_factory, location_factory):
+    """Without count, one unit is created per tag."""
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part_factory().pk,
+        container_type="Ampoule",
+        location_id=location_factory().pk,
+        uids=["T1", "T2"],
+    )
+    assert res.data["created_count"] == 2
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"count": 1, "uids": ["T1", "T2"]},
+        {"count": 2, "uids": ["T1", "t1"]},
+        {"count": 0},
+        {"count": 101},
+        {"count": "deux"},
+    ],
+)
+def test_unit_count_and_tags_rejected(rf, auth_user, part_factory, location_factory, extra):
+    """Too many tags, duplicated tags and out-of-range counts are rejected."""
+    from stock.models import StockItem
+
+    part = part_factory()
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part.pk,
+        container_type="Ampoule",
+        location_id=location_factory().pk,
+        **extra,
+    )
+    assert res.status_code == 400
+    assert not StockItem.objects.filter(part=part).exists()
+
+
+@pytest.mark.django_db
+def test_unit_bags_contenance(rf, auth_user, location_factory):
+    """Two 250 mL bags are created with quantity 250 each."""
+    from stock.models import StockItem
+
+    part = _solution_part(rf, auth_user)
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part.pk,
+        container_type="Poche",
+        location_id=location_factory().pk,
+        count=2,
+        quantity=250,
+    )
+    ids = [c["stock_item_id"] for c in res.data["created"]]
+    assert [float(q) for q in StockItem.objects.filter(pk__in=ids).values_list("quantity", flat=True)] == [250.0, 250.0]
+
+
+@pytest.mark.django_db
+def test_unit_ampoule_quantity_forced(rf, auth_user, part_factory, location_factory):
+    """An ampoule always has quantity 1."""
+    from stock.models import StockItem
+
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part_factory().pk,
+        container_type="Ampoule",
+        location_id=location_factory().pk,
+        quantity=5,
+    )
+    item = StockItem.objects.get(pk=res.data["created"][0]["stock_item_id"])
+    assert float(item.quantity) == 1.0
+
+
+@pytest.mark.django_db
+def test_unit_month_dates(rf, auth_user, part_factory, location_factory):
+    """Expiry YYYY-MM is stored at the end of the month, reception at the start."""
+    from datetime import date
+
+    from stock.models import StockItem
+
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part_factory().pk,
+        container_type="Ampoule",
+        location_id=location_factory().pk,
+        expiry_date="2028-02",
+        received_date="2026-11",
+    )
+    assert res.status_code == 200
+    item = StockItem.objects.get(pk=res.data["created"][0]["stock_item_id"])
+    assert item.expiry_date == date(2028, 2, 29)
+    assert item.metadata["received_date"] == "2026-11-01"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "dates",
+    [
+        {"expiry_date": "2026-10", "received_date": "2026-11"},
+        {"expiry_date": "13/2027"},
+    ],
+)
+def test_unit_bad_dates(rf, auth_user, part_factory, location_factory, dates):
+    """Expiry before reception, or an unreadable date, is rejected."""
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part_factory().pk,
+        container_type="Ampoule",
+        location_id=location_factory().pk,
+        **dates,
+    )
+    assert res.status_code == 400

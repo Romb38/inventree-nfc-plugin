@@ -14,12 +14,14 @@ can:
 - Link and unlink tags.
 - Review the full history of a unit (who did what, when, and how much).
 
-Each unit is one physical container. Three container types are supported:
+Each unit is one physical container. Four container types are supported:
 
 - **Ampoule** — a whole unit, consumed all at once. Marking it used sends it to
   zero (out of stock).
 - **Poche** — a bag/septum container, tracked in millilitres (mL); you remove
   partial amounts.
+- **Flacon Solution** — a vial of solution, tracked in milligrams (mg); same
+  fields and behaviour as a Poche.
 - **Flacon poudre** — a resealable powder vial, tracked in milligrams (mg); you
   remove partial amounts.
 
@@ -28,8 +30,9 @@ reader. Each workstation reaches its own agent.
 
 ## Where the panel appears
 
-The NFC panel is available on Part, Stock Item, Stock Location and Part Category
-pages, plus a scan widget on the dashboard and a Spotlight action. Open the
+The NFC panel is available on Part, Stock Item and Part Category (Parts index)
+pages, plus a scan widget on the dashboard and a Spotlight action. It is not
+shown on stock location pages. Open the
 relevant page and expand the NFC panel.
 
 ## Reader status
@@ -47,7 +50,12 @@ that this workstation's agent URL is correct (see *Agent settings* below).
 
 1. Confirm the reader status is green.
 2. Click **Scan NFC Tag**.
-3. Place the tag on the reader.
+3. Place the tag on the reader. A tag already lying on the reader when you
+   click is read immediately.
+
+While waiting, the button becomes **Stop scan**: click it to stop waiting
+without any error, then click **Scan NFC Tag** again to restart. Starting a new
+scan always cancels the previous one, so a tag is never "lost" to an old scan.
 
 If the tag is linked to a unit, the panel shows three zones:
 
@@ -65,26 +73,45 @@ Expand the **Create** section.
 
 ### Create a product
 
-Fill in the product fields (molecule, laboratory, dosage, form). The product
-name is assembled automatically. A product describes a medication; the physical
-units come next.
+Fill in the product fields:
+
+- **Drug name** (optional) — the trade name, e.g. Doliprane.
+- **Molecule (DCI)** and **Mass / concentration** (required).
+- **Form** — Solution or Poudre (required).
+- **Laboratory** (optional).
+- **Nature** (optional) — *Médicament formulé* or *Principe actif*.
+- **Manufacturer** (optional) — pick an existing manufacturer or type a new
+  name: it is created as an InvenTree manufacturer company and linked to the
+  product.
+- **Excipients** (optional, up to 500 characters).
+
+The product name is assembled automatically from drug name, molecule,
+laboratory, mass/concentration and form (100 characters at most). If a product
+with that exact name exists, it is reused unchanged. A product describes a
+medication; the physical units come next. Every value is stored as an InvenTree
+part parameter; missing parameter templates are created automatically.
 
 ### Create one or more units
 
 1. Choose the product.
 2. Choose the container type (filtered to what the product's form allows:
-   Solution → Ampoule or Poche; Poudre → Flacon poudre).
-3. Choose a **location** (required). Structural locations — folders that can't
-   hold stock — are not shown.
-4. Fill in the lot, quantity, expiry and reception dates.
-   - Dates are **month + year**. You can type `mm-yyyy`, `mm/yyyy`, `yyyy-mm`
-     or `yyyy/mm`. The month must be 01–12.
-5. **Add tags**: scan one or more tags. Each scanned tag appears as a chip. A
-   tag that is already in the list or already linked to another unit is refused
-   with a notice, so only valid tags are added.
-6. Submit. **One identical unit is created per tag** (same product, container,
-   location, lot, dates and quantity). If you add no tags, a single untagged
-   unit is created.
+   Solution → Ampoule, Poche or Flacon Solution; Poudre → Flacon poudre).
+3. Fill in the **storage location** (required): pick an existing location, or
+   type a new name — a new location is then created at the root of InvenTree's
+   stock locations (a `/` is just part of the name). Structural locations
+   (folders) cannot hold stock.
+4. Fill in the lot and the **number of units to add**.
+5. For a Poche or a Flacon, fill in the **quantity**: the contenance of each
+   unit (mL or mg). An ampoule always counts as 1.
+6. Fill in the expiry and reception dates, as **month + year**. You can type
+   `mm-yyyy`, `mm/yyyy`, `yyyy-mm` or `yyyy/mm`. The expiry is stored as the
+   **last day of the month** (valid until the end of the month); the panel shows
+   both dates as `MM/YYYY`.
+7. **Tags** (optional): one line per unit. Click **Scan** on a line and place a
+   tag; **Stop scan** stops waiting. A tag already used in the form or linked
+   to another unit is refused. Lines left empty create units without a tag, to
+   be linked later from the Stock Item page.
+8. Submit: the requested number of identical units is created.
 
 ## Adjust stock
 

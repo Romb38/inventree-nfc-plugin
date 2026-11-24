@@ -3,7 +3,7 @@ import { t } from '@lingui/core/macro';
 import {
   ActionIcon,
   Alert,
-  Badge,
+  Autocomplete,
   Box,
   Button,
   Group,
@@ -14,10 +14,11 @@ import {
   SegmentedControl,
   Stack,
   Text,
-  TextInput
+  TextInput,
+  Textarea
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconCheck, IconWifi } from '@tabler/icons-react';
+import { IconCheck, IconPlayerStop, IconWifi, IconX } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 import { playSound } from './sound';
 import { getEffectiveConfig } from './agentConfig';
@@ -25,17 +26,26 @@ import {
   createItem,
   createProduct,
   fetchLocations,
+  fetchManufacturers,
   fetchPartInfo,
   fetchParts,
   findByTag
 } from './api';
 import type { PartOption } from './types';
-import { scanOnce } from './agent';
-import { useReaderStatus } from './hooks';
+import { useAgentScan, useReaderStatus } from './hooks';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
+
+/** Pharmaceutical natures offered by the product form (stored as-is). */
+const NATURES = ['Médicament formulé', 'Principe actif'];
+
+/** Maximum length of the excipients text (InvenTree parameter limit). */
+const EXCIPIENTS_MAX_LENGTH = 500;
+
+/** Maximum number of units created in one go. */
+const MAX_UNITS = 100;
 
 /**
  * Extract a human-readable message from any DRF/InvenTree error payload:
@@ -46,7 +56,6 @@ function extractError(err: any, fallback: string): string {
   if (!data) return fallback;
   if (typeof data === 'string') return data;
   if (typeof data.error === 'string') return data.error;
-  // Field-keyed errors like { location: ["..."] } or { detail: "..." }
   const parts: string[] = [];
   for (const key of Object.keys(data)) {
     const val = data[key];
@@ -87,6 +96,20 @@ function parseMonthYear(input: string): { ym?: string; error?: string } {
   return { ym: `${year}-${String(month).padStart(2, '0')}` };
 }
 
+/** Container types allowed for a product form (all of them when the form is unknown). */
+function containersForForm(form: string | null): string[] {
+  if (form === 'Poudre') return ['Flacon poudre'];
+  if (form === 'Solution') return ['Ampoule', 'Poche', 'Flacon Solution'];
+  return ['Ampoule', 'Poche', 'Flacon Solution', 'Flacon poudre'];
+}
+
+/** Unit of measure of a container managed by quantity, or null for whole units. */
+function containerUnit(container: string | null): string | null {
+  if (container === 'Poche') return 'mL';
+  if (container === 'Flacon poudre' || container === 'Flacon Solution') return 'mg';
+  return null;
+}
+
 function ReaderDot({ connected }: { connected: boolean | null }) {
   return (
     <Box
@@ -107,29 +130,45 @@ function ReaderDot({ connected }: { connected: boolean | null }) {
   );
 }
 
-
-
 // ---------------------------------------------------------------------------
 // CREATE PART form
 // ---------------------------------------------------------------------------
 
+/**
+ * Product (part) creation form: drug name, molecule, mass/concentration, form,
+ * laboratory, nature, manufacturer and excipients. The product name is built
+ * automatically from the identity fields.
+ */
 export function CreatePartForm({
   context,
   onCreated
 }: {
   context: InvenTreePluginContext;
-  // Called after a part is created; receives the new part id + name so the
-  // container can offer "add a unit?" and hand off to the item tab.
   onCreated?: (partId: number, partName: string) => void;
 }) {
+  const [drugName, setDrugName] = useState('');
   const [molecule, setMolecule] = useState('');
   const [dosage, setDosage] = useState('');
   const [form, setForm] = useState<string | null>('Solution');
   const [laboratory, setLaboratory] = useState('');
+  const [nature, setNature] = useState<string | null>(null);
+  const [manufacturer, setManufacturer] = useState('');
+  const [excipients, setExcipients] = useState('');
+  const [manufacturers, setManufacturers] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const previewName = [molecule, laboratory, dosage, form]
+  useEffect(() => {
+    let active = true;
+    fetchManufacturers(context.api)
+      .then((names) => active && setManufacturers(names))
+      .catch(() => active && setManufacturers([]));
+    return () => {
+      active = false;
+    };
+  }, [context.api]);
+
+  const previewName = [drugName, molecule, laboratory, dosage, form]
     .map((s) => (s || '').trim())
     .filter(Boolean)
     .join(' ');
@@ -137,17 +176,32 @@ export function CreatePartForm({
   const canSubmit =
     !!molecule.trim() && !!dosage.trim() && (form === 'Solution' || form === 'Poudre');
 
+  function resetFields() {
+    setDrugName('');
+    setMolecule('');
+    setDosage('');
+    setLaboratory('');
+    setNature(null);
+    setManufacturer('');
+    setExcipients('');
+    setForm('Solution');
+  }
+
   async function doCreate() {
     setConfirmOpen(false);
     if (!canSubmit || submitting) return;
     setSubmitting(true);
     try {
       const data = await createProduct(context.api, {
+        drug_name: drugName.trim(),
         molecule: molecule.trim(),
         dosage: dosage.trim(),
         form,
         laboratory: laboratory.trim(),
-        add_unit: false // Part-only; the unit (with its container) is created in the Item tab.
+        nature: nature ?? '',
+        manufacturer: manufacturer.trim(),
+        excipients: excipients.trim(),
+        add_unit: false
       });
       notifications.show({
         title: data.reused_existing_part ? t`Product already exists` : t`Product created`,
@@ -156,14 +210,10 @@ export function CreatePartForm({
           : data.part_name,
         color: data.reused_existing_part ? 'yellow' : 'green'
       });
-      // Reset product fields
-      setMolecule('');
-      setDosage('');
-      setLaboratory('');
-      setForm('Solution');
-      // Only offer to add a unit when a NEW product was actually created.
-      // If it already existed, the user should use the Unit tab instead;
-      // prompting here would reward a mistaken re-entry.
+      resetFields();
+      if (manufacturer.trim() && !manufacturers.includes(manufacturer.trim())) {
+        setManufacturers((prev) => [...prev, manufacturer.trim()].sort());
+      }
       if (!data.reused_existing_part && onCreated) {
         onCreated(data.part_id, data.part_name);
       }
@@ -178,6 +228,17 @@ export function CreatePartForm({
     }
   }
 
+  const details = [
+    `${t`Molecule:`} ${molecule}`,
+    `${t`Mass / concentration:`} ${dosage}`,
+    `${t`Form:`} ${form}`,
+    laboratory ? `${t`Lab:`} ${laboratory}` : '',
+    nature ? `${t`Nature:`} ${nature}` : '',
+    manufacturer ? `${t`Manufacturer:`} ${manufacturer}` : ''
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <Stack gap='sm'>
       <Modal
@@ -191,10 +252,12 @@ export function CreatePartForm({
           <Text size='sm'>{t`Create this product?`}</Text>
           <Alert color='blue' variant='light' p='xs'>
             <Text size='sm' fw={600}>{previewName}</Text>
-            <Text size='xs' c='dimmed'>
-              {t`Molecule:`} {molecule} · {t`Dosage:`} {dosage} · {t`Form:`} {form}
-              {laboratory ? ` · ${t`Lab:`} ${laboratory}` : ''}
-            </Text>
+            <Text size='xs' c='dimmed'>{details}</Text>
+            {excipients.trim() && (
+              <Text size='xs' c='dimmed'>
+                {t`Excipients:`} {excipients.trim()}
+              </Text>
+            )}
           </Alert>
           <Group justify='flex-end' gap='xs'>
             <Button variant='default' size='xs' onClick={() => setConfirmOpen(false)}>
@@ -210,6 +273,12 @@ export function CreatePartForm({
       <Text fw={600}>{t`Create product`}</Text>
 
       <TextInput
+        label={t`Drug name`}
+        placeholder='Doliprane'
+        value={drugName}
+        onChange={(e) => setDrugName(e.currentTarget.value)}
+      />
+      <TextInput
         label={t`Molecule (DCI)`}
         placeholder='Paracétamol'
         value={molecule}
@@ -217,7 +286,7 @@ export function CreatePartForm({
         required
       />
       <TextInput
-        label={t`Dosage / concentration`}
+        label={t`Mass / concentration`}
         placeholder='10 mg/ml'
         value={dosage}
         onChange={(e) => setDosage(e.currentTarget.value)}
@@ -235,6 +304,36 @@ export function CreatePartForm({
         placeholder='B. Braun'
         value={laboratory}
         onChange={(e) => setLaboratory(e.currentTarget.value)}
+      />
+      <Select
+        label={t`Nature`}
+        placeholder={t`Choose a nature`}
+        data={NATURES}
+        value={nature}
+        onChange={setNature}
+        clearable
+      />
+      <Autocomplete
+        label={t`Manufacturer`}
+        description={
+          manufacturer.trim() && !manufacturers.includes(manufacturer.trim())
+            ? t`New manufacturer: it will be created.`
+            : undefined
+        }
+        placeholder='Fresenius Kabi'
+        data={manufacturers}
+        value={manufacturer}
+        onChange={setManufacturer}
+      />
+      <Textarea
+        label={t`Excipients`}
+        placeholder='Mannitol, eau pour préparations injectables'
+        autosize
+        minRows={2}
+        maxLength={EXCIPIENTS_MAX_LENGTH}
+        description={`${excipients.length}/${EXCIPIENTS_MAX_LENGTH}`}
+        value={excipients}
+        onChange={(e) => setExcipients(e.currentTarget.value)}
       />
 
       {previewName && (
@@ -260,6 +359,11 @@ export function CreatePartForm({
 // CREATE ITEM form
 // ---------------------------------------------------------------------------
 
+/**
+ * Unit (stock item) creation form: one or more identical units of a product,
+ * with a storage location (picked or created), a contenance for bag/vial
+ * containers, month/year dates and an optional NFC tag per unit.
+ */
 export function CreateItemForm({
   context,
   presetPartId,
@@ -274,34 +378,32 @@ export function CreateItemForm({
     presetPartId ? String(presetPartId) : null
   );
   const [locations, setLocations] = useState<PartOption[]>([]);
-  const [locationId, setLocationId] = useState<string | null>(null);
+  const [locationText, setLocationText] = useState('');
   const [batch, setBatch] = useState('');
-  const [expiry, setExpiry] = useState('');   // stored as YYYY-MM (month input)
+  const [expiry, setExpiry] = useState('');
   const [received, setReceived] = useState('');
   const [quantity, setQuantity] = useState<number | string>(1);
-
-  // Multiple tags -> multiple identical units (one per tag).
-  const [tags, setTags] = useState<string[]>([]);
-  const [scanning, setScanning] = useState(false);
+  const [count, setCount] = useState<number | string>(1);
+  const [tagSlots, setTagSlots] = useState<string[]>(['']);
+  const [scanningSlot, setScanningSlot] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const [partForm, setPartForm] = useState<string | null>(null);
   const [container, setContainer] = useState<string | null>(null);
 
-  const containerOptions =
-    partForm === 'Poudre'
-      ? ['Flacon poudre']
-      : partForm === 'Solution'
-        ? ['Ampoule', 'Poche']
-        : ['Ampoule', 'Poche', 'Flacon poudre'];
-
-  const behaviour: 'whole' | 'quantity' =
-    container === 'Poche' || container === 'Flacon poudre' ? 'quantity' : 'whole';
-  const unitLabel = container === 'Poche' ? 'mL' : container === 'Flacon poudre' ? 'mg' : null;
-
+  const scan = useAgentScan();
   const readerConnected = useReaderStatus(context);
 
-  // Load parts.
+  const containerOptions = containersForForm(partForm);
+  const unitLabel = containerUnit(container);
+  const unitCount = Math.min(
+    MAX_UNITS,
+    Math.max(1, Math.floor(typeof count === 'string' ? parseInt(count, 10) || 1 : count))
+  );
+
+  const matchedLocation = locations.find((l) => l.label === locationText.trim());
+  const isNewLocation = !!locationText.trim() && !matchedLocation;
+
   useEffect(() => {
     let active = true;
     fetchParts(context.api)
@@ -312,7 +414,6 @@ export function CreateItemForm({
     };
   }, [context.api]);
 
-  // Load stock locations.
   useEffect(() => {
     let active = true;
     fetchLocations(context.api)
@@ -327,11 +428,15 @@ export function CreateItemForm({
     if (presetPartId) setPartId(String(presetPartId));
   }, [presetPartId]);
 
+  useEffect(() => {
+    setTagSlots((prev) => Array.from({ length: unitCount }, (_, i) => prev[i] ?? ''));
+  }, [unitCount]);
+
   const CREATE_NEW = '__create_new__';
   const hasPart = !!partId && partId !== CREATE_NEW;
-  const ready = hasPart && !!container && !!locationId;
+  const showFields = hasPart && !!container;
+  const ready = showFields && !!locationText.trim();
 
-  // Fetch the part's form when chosen.
   useEffect(() => {
     if (!hasPart) {
       setPartForm(null);
@@ -344,8 +449,8 @@ export function CreateItemForm({
         if (!active) return;
         const f = data?.form ?? null;
         setPartForm(f);
-        if (f === 'Poudre') setContainer('Flacon poudre');
-        else setContainer(null);
+        const options = containersForForm(f);
+        setContainer(options.length === 1 ? options[0] : null);
       })
       .catch(() => {
         if (active) {
@@ -358,26 +463,24 @@ export function CreateItemForm({
     };
   }, [partId, hasPart, context.api]);
 
-  // Scan a tag and add it to the list (checking it isn't already linked).
-  async function handleScan() {
-    if (scanning) return;
-    setScanning(true);
+  async function scanSlot(index: number) {
+    if (scan.scanning) return;
+    setScanningSlot(index);
     try {
       const cfg = await getEffectiveConfig(context.api);
       playSound(cfg.sound_enabled, 'click');
-      const scanned = await scanOnce(cfg.agent_base_url, cfg.scan_timeout_seconds);
+      const scanned = await scan.start(cfg.agent_base_url, cfg.scan_timeout_seconds);
+      if (scanned === null) return;
 
-      // Already in the current list?
-      if (tags.includes(scanned)) {
+      if (tagSlots.some((u, i) => i !== index && u === scanned)) {
         playSound(cfg.sound_enabled, 'error');
         notifications.show({
           title: t`Already added`,
-          message: t`That tag is already in the list.`,
+          message: t`That tag is already used by another unit of this form.`,
           color: 'orange'
         });
         return;
       }
-      // Already linked to another unit?
       try {
         const check = await findByTag(context.api, scanned);
         if (check?.found) {
@@ -390,97 +493,89 @@ export function CreateItemForm({
           return;
         }
       } catch {
-        /* lookup failed — allow, backend will validate */
+        /* lookup failed — the server validates again on creation */
       }
 
-      setTags((prev) => [...prev, scanned]);
+      setTagSlots((prev) => prev.map((u, i) => (i === index ? scanned : u)));
       playSound(cfg.sound_enabled, 'success');
-      notifications.show({ title: t`Tag added`, message: scanned, color: 'green' });
-    } catch {
+    } catch (err: any) {
       notifications.show({
         title: t`Scan failed`,
-        message: t`Could not read a tag. Try again.`,
+        message:
+          err?.code === 'timeout' || err?.code === 'client_timeout'
+            ? t`No tag detected before timeout.`
+            : t`Could not read a tag. Try again.`,
         color: 'red'
       });
     } finally {
-      setScanning(false);
+      setScanningSlot(null);
     }
   }
 
-  function removeTag(uid: string) {
-    setTags((prev) => prev.filter((u) => u !== uid));
+  function clearSlot(index: number) {
+    setTagSlots((prev) => prev.map((u, i) => (i === index ? '' : u)));
   }
 
   async function handleSubmit() {
-    if (!ready || submitting) return;
-    if (!container) return;
+    if (!ready || submitting || !container) return;
+
+    const expiryParsed = parseMonthYear(expiry);
+    if (expiryParsed.error) {
+      notifications.show({
+        title: t`Invalid expiry date`,
+        message: expiryParsed.error,
+        color: 'red'
+      });
+      return;
+    }
+    const receivedParsed = parseMonthYear(received);
+    if (receivedParsed.error) {
+      notifications.show({
+        title: t`Invalid reception date`,
+        message: receivedParsed.error,
+        color: 'red'
+      });
+      return;
+    }
+    if (expiryParsed.ym && expiryParsed.ym < new Date().toISOString().slice(0, 7)) {
+      if (!window.confirm(t`This expiry date has already passed. Continue anyway?`)) {
+        return;
+      }
+    }
 
     setSubmitting(true);
     try {
-      // Parse & validate the month/year fields (4 formats, month 01–12).
-      const expiryParsed = parseMonthYear(expiry);
-      if (expiryParsed.error) {
-        notifications.show({
-          title: t`Invalid expiry date`,
-          message: expiryParsed.error,
-          color: 'red'
-        });
-        setSubmitting(false);
-        return;
-      }
-      const receivedParsed = parseMonthYear(received);
-      if (receivedParsed.error) {
-        notifications.show({
-          title: t`Invalid reception date`,
-          message: receivedParsed.error,
-          color: 'red'
-        });
-        setSubmitting(false);
-        return;
-      }
-      const expiryDate = expiryParsed.ym ? `${expiryParsed.ym}-01` : null;
-      const receivedDate = receivedParsed.ym ? `${receivedParsed.ym}-01` : null;
-
-      // Past-expiry warning (compare parsed YYYY-MM to the current month).
-      if (expiryParsed.ym) {
-        const nowMonth = new Date().toISOString().slice(0, 7);
-        if (expiryParsed.ym < nowMonth) {
-          if (!window.confirm(t`This expiry date has already passed. Continue anyway?`)) {
-            setSubmitting(false);
-            return;
-          }
-        }
-      }
-
       const body: Record<string, any> = {
         part_id: Number(partId),
         container_type: container,
-        location_id: Number(locationId),
         batch: batch.trim(),
-        expiry_date: expiryDate,
-        received_date: receivedDate,
-        quantity:
-          behaviour === 'whole'
-            ? 1
-            : typeof quantity === 'string'
-              ? parseFloat(quantity) || 0
-              : quantity,
-        uids: tags // may be empty -> creates a single untagged unit
+        expiry_date: expiryParsed.ym ?? null,
+        received_date: receivedParsed.ym ?? null,
+        quantity: typeof quantity === 'string' ? parseFloat(quantity) || 0 : quantity,
+        count: unitCount,
+        uids: tagSlots
       };
+      if (matchedLocation) body.location_id = Number(matchedLocation.value);
+      else body.location_name = locationText.trim();
 
       const data = await createItem(context.api, body);
       const n = data?.created_count ?? 0;
       notifications.show({
         title: n > 1 ? t`Units created` : t`Unit created`,
-        message: `${data.part_name ?? ''} — ${n}`,
+        message: `${data.part_name ?? ''} — ${n} · ${data.location_name ?? ''}`,
         color: 'green'
       });
-      // Reset per-unit fields, keep the part selected.
+      if (isNewLocation) {
+        fetchLocations(context.api)
+          .then(setLocations)
+          .catch(() => undefined);
+      }
       setBatch('');
       setExpiry('');
       setReceived('');
       setQuantity(1);
-      setTags([]);
+      setCount(1);
+      setTagSlots(['']);
     } catch (err: any) {
       notifications.show({
         title: t`Creation failed`,
@@ -525,7 +620,7 @@ export function CreateItemForm({
             partForm === 'Poudre'
               ? t`Powder → Flacon poudre (mg)`
               : partForm === 'Solution'
-                ? t`Solution → Ampoule (whole) or Poche (mL)`
+                ? t`Solution → Ampoule (whole), Poche (mL) or Flacon Solution (mg)`
                 : undefined
           }
           placeholder={t`Choose container`}
@@ -537,103 +632,127 @@ export function CreateItemForm({
         />
       )}
 
-      {hasPart && (
-        <Select
-          label={t`Location`}
-          placeholder={t`Choose a location`}
-          searchable
-          data={locations}
-          value={locationId}
-          onChange={setLocationId}
-          disabled={!container}
-          required
-        />
-      )}
-
-      {ready && (
+      {showFields && (
         <>
+          <Autocomplete
+            label={t`Storage location`}
+            placeholder={t`Choose or type a new location`}
+            description={
+              isNewLocation
+                ? `${t`New location:`} « ${locationText.trim()} » ${t`will be created.`}`
+                : undefined
+            }
+            data={locations.map((l) => l.label)}
+            value={locationText}
+            onChange={setLocationText}
+            required
+          />
           <TextInput
             label={t`Lot number`}
             value={batch}
             onChange={(e) => setBatch(e.currentTarget.value)}
           />
-          {behaviour === 'whole' ? (
-            <Text size='xs' c='dimmed'>{t`Whole unit (ampoule) → quantity is 1.`}</Text>
-          ) : (
+          <NumberInput
+            label={t`Number of units to add`}
+            min={1}
+            max={MAX_UNITS}
+            allowDecimal={false}
+            value={count}
+            onChange={setCount}
+            required
+          />
+          {unitLabel ? (
             <NumberInput
-              label={unitLabel ? `${t`Quantity`} (${unitLabel})` : t`Quantity`}
+              label={`${t`Quantity`} (${unitLabel})`}
+              description={t`Contenance of each unit.`}
               min={0}
               value={quantity}
               onChange={setQuantity}
+              required
             />
+          ) : (
+            <Text size='xs' c='dimmed'>{t`Whole unit (ampoule) → quantity is 1.`}</Text>
           )}
           <TextInput
             label={t`Expiry`}
-            description={t`mm-yyyy, mm/yyyy, yyyy-mm or yyyy/mm`}
+            description={t`Month/year (mm-yyyy): valid until the end of the month.`}
             placeholder='mm-yyyy'
             value={expiry}
             onChange={(e) => setExpiry(e.currentTarget.value)}
           />
           <TextInput
             label={t`Reception`}
-            description={t`mm-yyyy, mm/yyyy, yyyy-mm or yyyy/mm`}
+            description={t`Month/year (mm-yyyy).`}
             placeholder='mm-yyyy'
             value={received}
             onChange={(e) => setReceived(e.currentTarget.value)}
           />
 
-          {/* Multiple tags — one unit will be created per tag */}
           <div>
             <Group align='end' gap='xs'>
               <Text size='sm' style={{ flex: 1 }}>
-                {t`NFC tags`} ({tags.length})
+                {t`NFC tags`} ({tagSlots.filter(Boolean).length}/{unitCount})
               </Text>
               <ReaderDot connected={readerConnected} />
-              <Button
-                variant='light'
-                leftSection={scanning ? <Loader size={14} /> : <IconWifi size={16} />}
-                loading={scanning}
-                disabled={!readerConnected}
-                onClick={handleScan}
-              >
-                {t`Add tag`}
-              </Button>
             </Group>
-            {tags.length > 0 && (
-              <Group gap={6} mt={6}>
-                {tags.map((u) => (
-                  <Badge
-                    key={u}
-                    variant='light'
-                    rightSection={
-                      <ActionIcon
-                        size='xs'
-                        variant='transparent'
-                        onClick={() => removeTag(u)}
-                        aria-label={t`Remove`}
-                      >
-                        ×
-                      </ActionIcon>
-                    }
-                  >
-                    {u}
-                  </Badge>
-                ))}
+            <Stack gap={4} mt={4}>
+              {tagSlots.map((uid, index) => (
+                <Group key={index} gap='xs' wrap='nowrap'>
+                  <Text size='sm' w={70}>
+                    {t`Unit`} {index + 1}
+                  </Text>
+                  <Text size='sm' c={uid ? undefined : 'dimmed'} style={{ flex: 1 }}>
+                    {uid || t`No tag`}
+                  </Text>
+                  {scanningSlot === index ? (
+                    <Button
+                      size='xs'
+                      color='red'
+                      variant='light'
+                      leftSection={<IconPlayerStop size={14} />}
+                      onClick={scan.stop}
+                    >
+                      {t`Stop scan`}
+                    </Button>
+                  ) : (
+                    <Button
+                      size='xs'
+                      variant='light'
+                      leftSection={<IconWifi size={14} />}
+                      disabled={!readerConnected || scanningSlot !== null}
+                      onClick={() => scanSlot(index)}
+                    >
+                      {uid ? t`Rescan` : t`Scan`}
+                    </Button>
+                  )}
+                  {uid && (
+                    <ActionIcon
+                      variant='subtle'
+                      color='gray'
+                      aria-label={t`Remove`}
+                      onClick={() => clearSlot(index)}
+                    >
+                      <IconX size={14} />
+                    </ActionIcon>
+                  )}
+                </Group>
+              ))}
+            </Stack>
+            {scanningSlot !== null && (
+              <Group gap='xs' mt={4}>
+                <Loader size={14} />
+                <Text size='xs' c='dimmed'>{t`Waiting for tag...`}</Text>
               </Group>
             )}
             <Text size='xs' c='dimmed' mt={4}>
-              {tags.length > 0
-                ? t`One identical unit will be created per tag.`
-                : t`No tag: a single unit will be created without a tag.`}
+              {t`Tags are optional: units without a tag can be linked later.`}
             </Text>
           </div>
         </>
       )}
 
-      {hasPart && !ready && (
-        <Text size='xs' c='dimmed'>
-          {t`Choose a container and a location to continue.`}
-        </Text>
+      {hasPart && !container && (
+        <Text size='xs' c='dimmed'>{t`Choose a container to continue.`}</Text>
       )}
 
       <Button
@@ -643,7 +762,7 @@ export function CreateItemForm({
         loading={submitting}
         onClick={handleSubmit}
       >
-        {tags.length > 1 ? `${t`Create`} ${tags.length} ${t`units`}` : t`Add unit`}
+        {unitCount > 1 ? `${t`Create`} ${unitCount} ${t`units`}` : t`Add unit`}
       </Button>
     </Stack>
   );

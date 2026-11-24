@@ -16,13 +16,14 @@ import {
   Text
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconWifi } from '@tabler/icons-react';
+import { IconPlayerStop, IconWifi } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { CreateTabs } from './CreateForms';
 import { playSound } from './sound';
 import { getEffectiveConfig } from './agentConfig';
-import { getAgentHealth, scanOnce } from './agent';
+import { getAgentHealth } from './agent';
+import { useAgentScan } from './hooks';
 import type { AgentHealth } from './types';
 
 interface NfcConfig {
@@ -91,21 +92,22 @@ function NFCDashboardItem({ context }: { context: InvenTreePluginContext }) {
   const readerReady = !!health?.agent_reachable && !!health?.reader_connected;
   const canScan = !!config && readerReady;
 
-  const [scanning, setScanning] = useState(false);
+  const scan = useAgentScan();
+  const scanning = scan.scanning;
   const [result, setResult] = useState<TagLookupResult | null>(null);
 
   const startScan = useCallback(async () => {
     if (!config || scanning) return;
 
     playSound(config.sound_enabled, 'click')
-    setScanning(true);
     setResult(null);
 
     try {
-      const uid = await scanOnce(
+      const uid = await scan.start(
         config.agent_base_url,
         config.scan_timeout_seconds
       );
+      if (uid === null) return;
 
       const res = await context.api.get(`/plugin/nfc/tag/${uid}/`);
       const data: TagLookupResult = res.data;
@@ -130,10 +132,8 @@ function NFCDashboardItem({ context }: { context: InvenTreePluginContext }) {
             ? 'yellow'
             : 'red'
       });
-    } finally {
-      setScanning(false);
     }
-  }, [config, scanning, context.api, context.navigate]);
+  }, [config, scanning, scan, context.api, context.navigate]);
 
   return (
     <SimpleGrid cols={1} spacing='md'>
@@ -165,17 +165,31 @@ function NFCDashboardItem({ context }: { context: InvenTreePluginContext }) {
         </Text>
       </Group>
 
-      <Button
-        color='teal'
-        leftSection={
-          scanning ? <Loader size={14} color='white' /> : <IconWifi size={16} />
-        }
-        loading={scanning}
-        disabled={!canScan}
-        onClick={startScan}
-      >
-        {scanning ? t`Waiting for tag...` : t`Scan NFC Tag`}
-      </Button>
+      {scanning ? (
+        <Button
+          color='red'
+          variant='light'
+          leftSection={<IconPlayerStop size={16} />}
+          onClick={scan.stop}
+        >
+          {t`Stop scan`}
+        </Button>
+      ) : (
+        <Button
+          color='teal'
+          leftSection={<IconWifi size={16} />}
+          disabled={!canScan}
+          onClick={startScan}
+        >
+          {t`Scan NFC Tag`}
+        </Button>
+      )}
+      {scanning && (
+        <Group gap='xs'>
+          <Loader size={14} />
+          <Text size='xs' c='dimmed'>{t`Waiting for tag...`}</Text>
+        </Group>
+      )}
 
       <Button
         color='gray'
