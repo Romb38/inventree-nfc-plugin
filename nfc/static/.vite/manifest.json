@@ -1,13 +1,13 @@
 {
-  "_CreateForms-ByeNP5rM.js": {
-    "file": "assets/CreateForms-ByeNP5rM.js",
+  "_CreateForms-CuKaV9Ef.js": {
+    "file": "assets/CreateForms-CuKaV9Ef.js",
     "name": "CreateForms",
     "imports": [
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },
-  "_Settings-CftOliG5.js": {
-    "file": "assets/Settings-CftOliG5.js",
+  "_Settings-BzkupjBa.js": {
+    "file": "assets/Settings-BzkupjBa.js",
     "name": "Settings",
     "imports": [
       "_agentConfig-Dr0OC9Vq.js"
@@ -18,33 +18,33 @@
     "name": "agentConfig"
   },
   "src/Dashboard.tsx": {
-    "file": "Dashboard-Bt4ABybD.js",
+    "file": "Dashboard-CNvJnVd8.js",
     "name": "Dashboard",
     "src": "src/Dashboard.tsx",
     "isEntry": true,
     "imports": [
-      "_CreateForms-ByeNP5rM.js",
+      "_CreateForms-CuKaV9Ef.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },
   "src/Panel.tsx": {
-    "file": "Panel-CyNgSYaj.js",
+    "file": "Panel-BZXpXBSa.js",
     "name": "Panel",
     "src": "src/Panel.tsx",
     "isEntry": true,
     "imports": [
-      "_CreateForms-ByeNP5rM.js",
-      "_Settings-CftOliG5.js",
+      "_CreateForms-CuKaV9Ef.js",
+      "_Settings-BzkupjBa.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },
   "src/Settings.tsx": {
-    "file": "Settings-BmV5nKYZ.js",
+    "file": "Settings-DDWT25gP.js",
     "name": "Settings",
     "src": "src/Settings.tsx",
     "isEntry": true,
     "imports": [
-      "_Settings-CftOliG5.js",
+      "_Settings-BzkupjBa.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },
