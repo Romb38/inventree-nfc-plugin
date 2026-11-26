@@ -85,10 +85,11 @@ into `nfc/static/`, which InvenTree serves.
 
 ### Data model
 
-- A **Part** is a precise product (drug name + molecule + laboratory +
+- A **Part** is a precise product (drug name + molecule + manufacturer +
   mass/concentration + form), e.g. "Doliprane Paracétamol B. Braun 10 mg/ml
   Solution". Its nature, excipients and other fields are part parameters; its
-  manufacturer is an InvenTree manufacturer company.
+  manufacturer is an InvenTree manufacturer company, whose stored spelling is
+  used in the name.
 - A **StockItem** is one physical unit of that product, with its own lot,
   expiry, reception date, location, quantity and **container type**.
 - An **NFCTagLink** links one tag UID to one StockItem. A tag maps to a single
@@ -100,7 +101,8 @@ into `nfc/static/`, which InvenTree serves.
 
 Container types drive behaviour: **Ampoule** (whole unit, consumed at once),
 **Poche** (bag, tracked in mL), **Flacon Solution** (solution vial, tracked in
-mg) and **Flacon poudre** (powder vial, tracked in mg).
+mg), **Seringue** (syringe, tracked in mg) and **Flacon poudre** (powder vial,
+tracked in mg).
 
 ---
 
@@ -120,7 +122,7 @@ On the machine running InvenTree via Docker, from the folder that holds
 persistent plugin list (`plugins.txt` in the `INVENTREE_EXT_VOLUME` folder):
 
 ```text
-inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.3.0
+inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.4.0
 ```
 
 Then install it into the containers:

@@ -182,7 +182,7 @@ def test_tag_by_stock_item_not_found(rf, auth_user, stock_item_factory):
 def test_create_product_success(rf, auth_user):
     request = rf.post("/", {
         "molecule": "Paracetamol", "dosage": "10 mg/ml",
-        "form": "Solution", "laboratory": "B. Braun", "add_unit": False,
+        "form": "Solution", "manufacturer": "B. Braun", "add_unit": False,
     }, format="json")
     request.user = auth_user
     res = _call(NFCCreateProductView.as_view(), request)
@@ -197,7 +197,7 @@ def test_create_product_success(rf, auth_user):
 def test_create_product_reuses_existing(rf, auth_user):
     body = {
         "molecule": "Paracetamol", "dosage": "10 mg/ml",
-        "form": "Solution", "laboratory": "B. Braun", "add_unit": False,
+        "form": "Solution", "manufacturer": "B. Braun", "add_unit": False,
     }
     r1 = rf.post("/", body, format="json"); r1.user = auth_user
     _call(NFCCreateProductView.as_view(), r1)
@@ -718,7 +718,7 @@ def test_create_product_with_unit_records_created(rf, auth_user, location_factor
             "molecule": "Paracetamol",
             "dosage": "10 mg/ml",
             "form": "Solution",
-            "laboratory": "B. Braun",
+            "manufacturer": "B. Braun",
             "add_unit": True,
             "container_type": "Poche",
             "quantity": 100,
@@ -766,7 +766,7 @@ def _part_params(part_id):
 @pytest.mark.django_db
 def test_product_name_starts_with_drug_name(rf, auth_user):
     """The drug name is the first component of the automatic product name."""
-    res = _create_product(rf, auth_user, drug_name="Doliprane", laboratory="B. Braun")
+    res = _create_product(rf, auth_user, drug_name="Doliprane", manufacturer="B. Braun")
     assert res.status_code == 200
     assert res.data["part_name"] == "Doliprane Paracetamol B. Braun 10 mg/ml Solution"
 
@@ -781,7 +781,7 @@ def test_product_parameters_and_templates_created(rf, auth_user):
         rf,
         auth_user,
         drug_name="Doliprane",
-        laboratory="B. Braun",
+        manufacturer="B. Braun",
         nature="Médicament formulé",
         excipients="Mannitol, eau ppi",
     )
@@ -792,13 +792,38 @@ def test_product_parameters_and_templates_created(rf, auth_user):
         "Molecule (DCI)": "Paracetamol",
         "Dosage": "10 mg/ml",
         "Form": "Solution",
-        "Laboratory": "B. Braun",
         "Nature": "Médicament formulé",
         "Excipients": "Mannitol, eau ppi",
     }
     assert ParameterTemplate.objects.get(name="Nature").choices == (
         "Médicament formulé,Principe actif"
     )
+    assert not ParameterTemplate.objects.filter(name="Laboratory").exists()
+
+
+@pytest.mark.django_db
+def test_product_name_uses_existing_manufacturer_spelling(rf, auth_user):
+    """A known manufacturer keeps its stored spelling in the product name."""
+    from company.models import Company
+
+    Company.objects.create(name="B. Braun", is_manufacturer=True)
+    res = _create_product(rf, auth_user, manufacturer="b. braun")
+    assert res.status_code == 200
+    assert res.data["part_name"] == "Paracetamol B. Braun 10 mg/ml Solution"
+    assert Company.objects.filter(name__iexact="b. braun").count() == 1
+
+
+@pytest.mark.django_db
+def test_product_laboratory_field_ignored(rf, auth_user):
+    """A legacy 'laboratory' value is ignored: not in the name, parameters or manufacturers."""
+    from company.models import Company, ManufacturerPart
+
+    res = _create_product(rf, auth_user, laboratory="Sanofi")
+    assert res.status_code == 200
+    assert res.data["part_name"] == "Paracetamol 10 mg/ml Solution"
+    assert "Laboratory" not in _part_params(res.data["part_id"])
+    assert not Company.objects.filter(name__iexact="Sanofi").exists()
+    assert not ManufacturerPart.objects.filter(part_id=res.data["part_id"]).exists()
 
 
 @pytest.mark.django_db
@@ -851,13 +876,16 @@ def test_existing_product_not_modified(rf, auth_user):
     """Re-creating an existing product changes neither its parameters nor its manufacturer."""
     from company.models import ManufacturerPart
 
-    first = _create_product(rf, auth_user, nature="Principe actif")
+    first = _create_product(
+        rf, auth_user, nature="Principe actif", manufacturer="Fresenius"
+    )
     again = _create_product(
-        rf, auth_user, nature="Médicament formulé", manufacturer="Other"
+        rf, auth_user, nature="Médicament formulé", manufacturer="fresenius"
     )
     assert again.data["reused_existing_part"] is True
+    assert again.data["part_id"] == first.data["part_id"]
     assert _part_params(first.data["part_id"])["Nature"] == "Principe actif"
-    assert not ManufacturerPart.objects.filter(part_id=first.data["part_id"]).exists()
+    assert ManufacturerPart.objects.filter(part_id=first.data["part_id"]).count() == 1
 
 
 @pytest.mark.django_db
@@ -890,8 +918,9 @@ def _solution_part(rf, user, form="Solution"):
 
 
 @pytest.mark.django_db
-def test_flacon_solution_unit_in_mg(rf, auth_user, location_factory):
-    """A 'Flacon Solution' unit keeps its quantity and is managed in mg."""
+@pytest.mark.parametrize("container", ["Flacon Solution", "Seringue"])
+def test_solution_container_unit_in_mg(rf, auth_user, location_factory, container):
+    """'Flacon Solution' and 'Seringue' units keep their quantity and are managed in mg."""
     from stock.models import StockItem
 
     from nfc.views import _serialize_tube
@@ -901,7 +930,7 @@ def test_flacon_solution_unit_in_mg(rf, auth_user, location_factory):
         rf,
         auth_user,
         part_id=part.pk,
-        container_type="Flacon Solution",
+        container_type=container,
         location_id=location_factory().pk,
         quantity=500,
     )
@@ -912,18 +941,41 @@ def test_flacon_solution_unit_in_mg(rf, auth_user, location_factory):
 
 
 @pytest.mark.django_db
-def test_flacon_solution_refused_for_powder(rf, auth_user, location_factory):
-    """'Flacon Solution' is refused for a powder product."""
+@pytest.mark.parametrize("container", ["Flacon Solution", "Seringue"])
+def test_solution_container_refused_for_powder(rf, auth_user, location_factory, container):
+    """'Flacon Solution' and 'Seringue' are refused for a powder product."""
     part = _solution_part(rf, auth_user, form="Poudre")
     res = _create_item(
         rf,
         auth_user,
         part_id=part.pk,
-        container_type="Flacon Solution",
+        container_type=container,
         location_id=location_factory().pk,
         quantity=500,
     )
     assert res.status_code == 400
+
+
+@pytest.mark.django_db
+def test_several_syringes_with_count(rf, auth_user, location_factory):
+    """Three 50 mg syringes are created as three units of quantity 50."""
+    from stock.models import StockItem
+
+    part = _solution_part(rf, auth_user)
+    res = _create_item(
+        rf,
+        auth_user,
+        part_id=part.pk,
+        container_type="Seringue",
+        location_id=location_factory().pk,
+        quantity=50,
+        count=3,
+    )
+    assert res.status_code == 200
+    ids = [c["stock_item_id"] for c in res.data["created"]]
+    assert len(ids) == 3
+    assert {float(i.quantity) for i in StockItem.objects.filter(pk__in=ids)} == {50.0}
+    assert {i.metadata["container_type"] for i in StockItem.objects.filter(pk__in=ids)} == {"Seringue"}
 
 
 # --- unit-form-rework ---

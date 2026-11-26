@@ -14,7 +14,7 @@ can:
 - Link and unlink tags.
 - Review the full history of a unit (who did what, when, and how much).
 
-Each unit is one physical container. Four container types are supported:
+Each unit is one physical container. Five container types are supported:
 
 - **Ampoule** — a whole unit, consumed all at once. Marking it used sends it to
   zero (out of stock).
@@ -22,6 +22,8 @@ Each unit is one physical container. Four container types are supported:
   partial amounts.
 - **Flacon Solution** — a vial of solution, tracked in milligrams (mg); same
   fields and behaviour as a Poche.
+- **Seringue** — a syringe of solution, tracked in milligrams (mg); same fields
+  and behaviour as a Flacon Solution.
 - **Flacon poudre** — a resealable powder vial, tracked in milligrams (mg); you
   remove partial amounts.
 
@@ -78,15 +80,15 @@ Fill in the product fields:
 - **Drug name** (optional) — the trade name, e.g. Doliprane.
 - **Molecule (DCI)** and **Mass / concentration** (required).
 - **Form** — Solution or Poudre (required).
-- **Laboratory** (optional).
 - **Nature** (optional) — *Médicament formulé* or *Principe actif*.
-- **Manufacturer** (optional) — pick an existing manufacturer or type a new
-  name: it is created as an InvenTree manufacturer company and linked to the
-  product.
+- **Manufacturer** (optional) — the company that makes the drug. Pick an
+  existing manufacturer or type a new name: it is created as an InvenTree
+  manufacturer company and linked to the product.
 - **Excipients** (optional, up to 500 characters).
 
 The product name is assembled automatically from drug name, molecule,
-laboratory, mass/concentration and form (100 characters at most). If a product
+manufacturer, mass/concentration and form (100 characters at most). A known
+manufacturer is written with its stored spelling, whatever the case typed. If a product
 with that exact name exists, it is reused unchanged. A product describes a
 medication; the physical units come next. Every value is stored as an InvenTree
 part parameter; missing parameter templates are created automatically.
@@ -95,7 +97,8 @@ part parameter; missing parameter templates are created automatically.
 
 1. Choose the product.
 2. Choose the container type (filtered to what the product's form allows:
-   Solution → Ampoule, Poche or Flacon Solution; Poudre → Flacon poudre).
+   Solution → Ampoule, Poche, Flacon Solution or Seringue; Poudre → Flacon
+   poudre).
 3. Fill in the **storage location** (required): pick an existing location, or
    type a new name — a new location is then created at the root of InvenTree's
    stock locations (a `/` is just part of the name). Structural locations

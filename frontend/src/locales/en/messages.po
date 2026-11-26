@@ -13,588 +13,338 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/CreateForms.tsx:86
-#~ msgid "01 - January"
-#~ msgstr "01 - January"
-
-#: src/CreateForms.tsx:87
-#~ msgid "02 - February"
-#~ msgstr "02 - February"
-
-#: src/CreateForms.tsx:88
-#~ msgid "03 - March"
-#~ msgstr "03 - March"
-
-#: src/CreateForms.tsx:89
-#~ msgid "04 - April"
-#~ msgstr "04 - April"
-
-#: src/CreateForms.tsx:90
-#~ msgid "05 - May"
-#~ msgstr "05 - May"
-
-#: src/CreateForms.tsx:91
-#~ msgid "06 - June"
-#~ msgstr "06 - June"
-
-#: src/CreateForms.tsx:92
-#~ msgid "07 - July"
-#~ msgstr "07 - July"
-
-#: src/CreateForms.tsx:93
-#~ msgid "08 - August"
-#~ msgstr "08 - August"
-
-#: src/CreateForms.tsx:94
-#~ msgid "09 - September"
-#~ msgstr "09 - September"
-
-#: src/CreateForms.tsx:95
-#~ msgid "10 - October"
-#~ msgstr "10 - October"
-
-#: src/CreateForms.tsx:96
-#~ msgid "11 - November"
-#~ msgstr "11 - November"
-
-#: src/CreateForms.tsx:97
-#~ msgid "12 - December"
-#~ msgstr "12 - December"
-
-#: src/CreateForms.tsx:108
-#~ msgid "mm-yyyy"
-#~ msgstr "mm-yyyy"
-
-#: src/CreateForms.tsx:111
-#~ msgid "Month"
-#~ msgstr "Month"
-
-#: src/CreateForms.tsx:118
-#~ msgid "Year"
-#~ msgstr "Year"
-
-#: src/CreateForms.tsx:195
-#~ msgid "Dosage:"
-#~ msgstr "Dosage:"
-
-#: src/CreateForms.tsx:207
+#: src/CreateForms.tsx:211
 msgid "Product already exists"
 msgstr "Product already exists"
 
-#: src/CreateForms.tsx:207
-#: src/CreateForms.tsx:789
+#: src/CreateForms.tsx:211
+#: src/CreateForms.tsx:786
 msgid "Product created"
 msgstr "Product created"
 
-#: src/CreateForms.tsx:209
+#: src/CreateForms.tsx:213
 msgid "This product already exists — no new product was created."
 msgstr "This product already exists — no new product was created."
 
-#: src/CreateForms.tsx:220
-#~ msgid "Dosage / concentration"
-#~ msgstr "Dosage / concentration"
-
-#: src/CreateForms.tsx:222
-#: src/CreateForms.tsx:581
+#: src/CreateForms.tsx:226
+#: src/CreateForms.tsx:578
 msgid "Creation failed"
 msgstr "Creation failed"
 
-#: src/CreateForms.tsx:223
+#: src/CreateForms.tsx:227
 msgid "Could not create the product."
 msgstr "Could not create the product."
 
-#: src/CreateForms.tsx:232
+#: src/CreateForms.tsx:236
 msgid "Molecule:"
 msgstr "Molecule:"
 
-#: src/CreateForms.tsx:233
+#: src/CreateForms.tsx:237
 msgid "Mass / concentration:"
 msgstr "Mass / concentration:"
 
-#: src/CreateForms.tsx:234
+#: src/CreateForms.tsx:238
 msgid "Form:"
 msgstr "Form:"
 
-#: src/CreateForms.tsx:235
-msgid "Lab:"
-msgstr "Lab:"
-
-#: src/CreateForms.tsx:236
-msgid "Nature:"
-msgstr "Nature:"
-
-#: src/CreateForms.tsx:237
+#: src/CreateForms.tsx:239
 msgid "Manufacturer:"
 msgstr "Manufacturer:"
 
-#: src/CreateForms.tsx:247
+#: src/CreateForms.tsx:240
+msgid "Nature:"
+msgstr "Nature:"
+
+#: src/CreateForms.tsx:250
 msgid "Confirm new product"
 msgstr "Confirm new product"
 
-#: src/CreateForms.tsx:250
-#~ msgid "Ampoule = whole unit · Poche = mL · Flacon poudre = mg"
-#~ msgstr "Ampoule = whole unit · Poche = mL · Flacon poudre = mg"
-
-#: src/CreateForms.tsx:252
+#: src/CreateForms.tsx:255
 msgid "Create this product?"
 msgstr "Create this product?"
 
-#: src/CreateForms.tsx:258
+#: src/CreateForms.tsx:261
 msgid "Excipients:"
 msgstr "Excipients:"
 
-#: src/CreateForms.tsx:264
+#: src/CreateForms.tsx:267
 #: src/Panel.tsx:467
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/CreateForms.tsx:267
+#: src/CreateForms.tsx:270
 msgid "Confirm"
 msgstr "Confirm"
 
-#: src/CreateForms.tsx:273
+#: src/CreateForms.tsx:276
 #: src/Panel.tsx:971
 msgid "Create product"
 msgstr "Create product"
 
-#: src/CreateForms.tsx:276
+#: src/CreateForms.tsx:279
 msgid "Drug name"
 msgstr "Drug name"
 
-#: src/CreateForms.tsx:282
+#: src/CreateForms.tsx:285
 msgid "Molecule (DCI)"
 msgstr "Molecule (DCI)"
 
-#: src/CreateForms.tsx:289
+#: src/CreateForms.tsx:292
 msgid "Mass / concentration"
 msgstr "Mass / concentration"
 
-#: src/CreateForms.tsx:296
+#: src/CreateForms.tsx:299
 msgid "Form"
 msgstr "Form"
 
-#: src/CreateForms.tsx:303
-msgid "Laboratory"
-msgstr "Laboratory"
-
-#: src/CreateForms.tsx:309
+#: src/CreateForms.tsx:306
 msgid "Nature"
 msgstr "Nature"
 
-#: src/CreateForms.tsx:310
+#: src/CreateForms.tsx:307
 msgid "Choose a nature"
 msgstr "Choose a nature"
 
-#: src/CreateForms.tsx:317
+#: src/CreateForms.tsx:314
 msgid "Manufacturer"
 msgstr "Manufacturer"
 
-#: src/CreateForms.tsx:320
+#: src/CreateForms.tsx:317
 msgid "New manufacturer: it will be created."
 msgstr "New manufacturer: it will be created."
 
-#: src/CreateForms.tsx:329
+#: src/CreateForms.tsx:326
 msgid "Excipients"
 msgstr "Excipients"
 
-#: src/CreateForms.tsx:341
+#: src/CreateForms.tsx:338
 msgid "Product name will be:"
 msgstr "Product name will be:"
 
-#: src/CreateForms.tsx:352
+#: src/CreateForms.tsx:349
 msgid "Add product"
 msgstr "Add product"
 
-#: src/CreateForms.tsx:375
-#~ msgid "That tag is already in the list."
-#~ msgstr "That tag is already in the list."
-
-#: src/CreateForms.tsx:394
-#~ msgid "This tag is linked to another unit. Use a different tag."
-#~ msgstr "This tag is linked to another unit. Use a different tag."
-
-#: src/CreateForms.tsx:398
-#~ msgid "Tag added"
-#~ msgstr "Tag added"
-
-#: src/CreateForms.tsx:406
-#~ msgid "Tag scanned"
-#~ msgstr "Tag scanned"
-
-#: src/CreateForms.tsx:424
-#~ msgid "Container required"
-#~ msgstr "Container required"
-
-#: src/CreateForms.tsx:425
-#~ msgid "Choose the container type for this unit."
-#~ msgstr "Choose the container type for this unit."
-
-#: src/CreateForms.tsx:434
-#~ msgid "Unit number required"
-#~ msgstr "Unit number required"
-
-#: src/CreateForms.tsx:435
-#~ msgid "Ampoules need a unit number (serial). Please enter one."
-#~ msgstr "Ampoules need a unit number (serial). Please enter one."
-
-#: src/CreateForms.tsx:447
-#~ msgid "This expiry date has already passed. Add this unit anyway?"
-#~ msgstr "This expiry date has already passed. Add this unit anyway?"
-
-#: src/CreateForms.tsx:452
-#~ msgid "Expiry date (YYYY-MM-DD)"
-#~ msgstr "Expiry date (YYYY-MM-DD)"
-
-#: src/CreateForms.tsx:459
-#~ msgid "Reception date (YYYY-MM-DD)"
-#~ msgstr "Reception date (YYYY-MM-DD)"
-
-#: src/CreateForms.tsx:478
+#: src/CreateForms.tsx:475
 msgid "Already added"
 msgstr "Already added"
 
-#: src/CreateForms.tsx:479
+#: src/CreateForms.tsx:476
 msgid "That tag is already used by another unit of this form."
 msgstr "That tag is already used by another unit of this form."
 
-#: src/CreateForms.tsx:480
-#~ msgid "Serialized unit → quantity is 1."
-#~ msgstr "Serialized unit → quantity is 1."
-
-#: src/CreateForms.tsx:489
+#: src/CreateForms.tsx:486
 msgid "Tag already in use"
 msgstr "Tag already in use"
 
-#: src/CreateForms.tsx:490
+#: src/CreateForms.tsx:487
 msgid "This tag is linked to another unit."
 msgstr "This tag is linked to another unit."
 
-#: src/CreateForms.tsx:491
-#~ msgid "Could not create the unit."
-#~ msgstr "Could not create the unit."
-
-#: src/CreateForms.tsx:503
+#: src/CreateForms.tsx:500
 #: src/Dashboard.tsx:128
 #: src/Panel.tsx:330
 msgid "Scan failed"
 msgstr "Scan failed"
 
-#: src/CreateForms.tsx:506
+#: src/CreateForms.tsx:503
 msgid "No tag detected before timeout."
 msgstr "No tag detected before timeout."
 
-#: src/CreateForms.tsx:507
+#: src/CreateForms.tsx:504
 msgid "Could not read a tag. Try again."
 msgstr "Could not read a tag. Try again."
 
-#: src/CreateForms.tsx:525
+#: src/CreateForms.tsx:522
 msgid "Invalid expiry date"
 msgstr "Invalid expiry date"
 
-#: src/CreateForms.tsx:528
-#~ msgid "Solution → Ampoule (whole) or Poche (mL)"
-#~ msgstr "Solution → Ampoule (whole) or Poche (mL)"
-
-#: src/CreateForms.tsx:534
+#: src/CreateForms.tsx:531
 msgid "Invalid reception date"
 msgstr "Invalid reception date"
 
-#: src/CreateForms.tsx:541
+#: src/CreateForms.tsx:538
 msgid "This expiry date has already passed. Continue anyway?"
 msgstr "This expiry date has already passed. Continue anyway?"
 
-#: src/CreateForms.tsx:542
-#~ msgid "Location"
-#~ msgstr "Location"
-
-#: src/CreateForms.tsx:543
-#~ msgid "Choose a location"
-#~ msgstr "Choose a location"
-
-#: src/CreateForms.tsx:563
-#~ msgid "Unit number (serial)"
-#~ msgstr "Unit number (serial)"
-
-#: src/CreateForms.tsx:564
+#: src/CreateForms.tsx:561
 #: src/Panel.tsx:848
 msgid "Unit created"
 msgstr "Unit created"
 
-#: src/CreateForms.tsx:564
+#: src/CreateForms.tsx:561
 msgid "Units created"
 msgstr "Units created"
 
-#: src/CreateForms.tsx:572
 #: src/CreateForms.tsx:579
-#~ msgid "mm-yyyy, mm/yyyy, yyyy-mm or yyyy/mm"
-#~ msgstr "mm-yyyy, mm/yyyy, yyyy-mm or yyyy/mm"
-
-#: src/CreateForms.tsx:576
-#~ msgid "Remaining amount in"
-#~ msgstr "Remaining amount in"
-
-#: src/CreateForms.tsx:581
-#~ msgid "Expiry (month/year)"
-#~ msgstr "Expiry (month/year)"
-
-#: src/CreateForms.tsx:582
 msgid "Could not create the unit(s)."
 msgstr "Could not create the unit(s)."
 
-#: src/CreateForms.tsx:586
-#~ msgid "Expiry date"
-#~ msgstr "Expiry date"
-
-#: src/CreateForms.tsx:587
-#~ msgid "Reception (month/year)"
-#~ msgstr "Reception (month/year)"
-
-#: src/CreateForms.tsx:591
-#: src/CreateForms.tsx:598
-#~ msgid "Choose month and year"
-#~ msgstr "Choose month and year"
-
-#: src/CreateForms.tsx:592
+#: src/CreateForms.tsx:589
 msgid "Create unit"
 msgstr "Create unit"
 
-#: src/CreateForms.tsx:593
-#~ msgid "Reception date"
-#~ msgstr "Reception date"
-
-#: src/CreateForms.tsx:595
+#: src/CreateForms.tsx:592
 msgid "Product (part)"
 msgstr "Product (part)"
 
-#: src/CreateForms.tsx:596
+#: src/CreateForms.tsx:593
 msgid "Search a product..."
 msgstr "Search a product..."
 
-#: src/CreateForms.tsx:599
-#~ msgid "Add tag"
-#~ msgstr "Add tag"
-
 #: src/CreateForms.tsx:603
-#~ msgid "NFC tag (optional)"
-#~ msgstr "NFC tag (optional)"
-
-#: src/CreateForms.tsx:604
-#~ msgid "Scan to fill"
-#~ msgstr "Scan to fill"
-
-#: src/CreateForms.tsx:606
 msgid "➕ Create new part"
 msgstr "➕ Create new part"
 
-#: src/CreateForms.tsx:612
+#: src/CreateForms.tsx:609
 msgid "Choose a product first to enable the unit fields."
 msgstr "Choose a product first to enable the unit fields."
 
-#: src/CreateForms.tsx:618
+#: src/CreateForms.tsx:615
 msgid "Container type"
 msgstr "Container type"
 
-#: src/CreateForms.tsx:621
+#: src/CreateForms.tsx:618
 msgid "Powder → Flacon poudre (mg)"
 msgstr "Powder → Flacon poudre (mg)"
 
-#: src/CreateForms.tsx:623
-msgid "Solution → Ampoule (whole), Poche (mL) or Flacon Solution (mg)"
-msgstr "Solution → Ampoule (whole), Poche (mL) or Flacon Solution (mg)"
+#: src/CreateForms.tsx:620
+msgid "Solution → Ampoule (whole), Poche (mL), Flacon Solution or Seringue (mg)"
+msgstr "Solution → Ampoule (whole), Poche (mL), Flacon Solution or Seringue (mg)"
 
-#: src/CreateForms.tsx:626
+#: src/CreateForms.tsx:623
 msgid "Choose container"
 msgstr "Choose container"
 
-#: src/CreateForms.tsx:626
-#~ msgid "One identical unit will be created per tag."
-#~ msgstr "One identical unit will be created per tag."
-
-#: src/CreateForms.tsx:627
-#~ msgid "No tag: a single unit will be created without a tag."
-#~ msgstr "No tag: a single unit will be created without a tag."
-
 #: src/CreateForms.tsx:635
-#~ msgid "Choose a container and a location to continue."
-#~ msgstr "Choose a container and a location to continue."
-
-#: src/CreateForms.tsx:638
 msgid "Storage location"
 msgstr "Storage location"
 
-#: src/CreateForms.tsx:639
+#: src/CreateForms.tsx:636
 msgid "Choose or type a new location"
 msgstr "Choose or type a new location"
 
-#: src/CreateForms.tsx:642
+#: src/CreateForms.tsx:639
 msgid "New location:"
 msgstr "New location:"
 
-#: src/CreateForms.tsx:642
+#: src/CreateForms.tsx:639
 msgid "will be created."
 msgstr "will be created."
 
-#: src/CreateForms.tsx:651
+#: src/CreateForms.tsx:648
 msgid "Lot number"
 msgstr "Lot number"
 
-#: src/CreateForms.tsx:656
+#: src/CreateForms.tsx:653
 msgid "Number of units to add"
 msgstr "Number of units to add"
 
-#: src/CreateForms.tsx:666
+#: src/CreateForms.tsx:663
 msgid "Quantity"
 msgstr "Quantity"
 
-#: src/CreateForms.tsx:667
+#: src/CreateForms.tsx:664
 msgid "Contenance of each unit."
 msgstr "Contenance of each unit."
 
-#: src/CreateForms.tsx:674
+#: src/CreateForms.tsx:671
 msgid "Whole unit (ampoule) → quantity is 1."
 msgstr "Whole unit (ampoule) → quantity is 1."
 
-#: src/CreateForms.tsx:677
+#: src/CreateForms.tsx:674
 msgid "Expiry"
 msgstr "Expiry"
 
-#: src/CreateForms.tsx:678
+#: src/CreateForms.tsx:675
 msgid "Month/year (mm-yyyy): valid until the end of the month."
 msgstr "Month/year (mm-yyyy): valid until the end of the month."
 
-#: src/CreateForms.tsx:684
+#: src/CreateForms.tsx:681
 msgid "Reception"
 msgstr "Reception"
 
-#: src/CreateForms.tsx:685
+#: src/CreateForms.tsx:682
 msgid "Month/year (mm-yyyy)."
 msgstr "Month/year (mm-yyyy)."
 
-#: src/CreateForms.tsx:694
+#: src/CreateForms.tsx:691
 msgid "NFC tags"
 msgstr "NFC tags"
 
-#: src/CreateForms.tsx:702
-#: src/CreateForms.tsx:826
+#: src/CreateForms.tsx:699
+#: src/CreateForms.tsx:823
 #: src/Panel.tsx:896
 msgid "Unit"
 msgstr "Unit"
 
-#: src/CreateForms.tsx:705
+#: src/CreateForms.tsx:702
 msgid "No tag"
 msgstr "No tag"
 
-#: src/CreateForms.tsx:715
+#: src/CreateForms.tsx:712
 #: src/Dashboard.tsx:175
 #: src/Panel.tsx:578
 #: src/Panel.tsx:618
 msgid "Stop scan"
 msgstr "Stop scan"
 
-#: src/CreateForms.tsx:725
+#: src/CreateForms.tsx:722
 msgid "Rescan"
 msgstr "Rescan"
 
-#: src/CreateForms.tsx:725
+#: src/CreateForms.tsx:722
 msgid "Scan"
 msgstr "Scan"
 
-#: src/CreateForms.tsx:732
+#: src/CreateForms.tsx:729
 #: src/Panel.tsx:763
 #: src/Panel.tsx:770
 msgid "Remove"
 msgstr "Remove"
 
-#: src/CreateForms.tsx:744
+#: src/CreateForms.tsx:741
 #: src/Dashboard.tsx:190
 #: src/Panel.tsx:593
 #: src/Panel.tsx:633
 msgid "Waiting for tag..."
 msgstr "Waiting for tag..."
 
-#: src/CreateForms.tsx:748
+#: src/CreateForms.tsx:745
 msgid "Tags are optional: units without a tag can be linked later."
 msgstr "Tags are optional: units without a tag can be linked later."
 
-#: src/CreateForms.tsx:755
+#: src/CreateForms.tsx:752
 msgid "Choose a container to continue."
 msgstr "Choose a container to continue."
 
-#: src/CreateForms.tsx:765
+#: src/CreateForms.tsx:762
 msgid "Create"
 msgstr "Create"
 
-#: src/CreateForms.tsx:765
+#: src/CreateForms.tsx:762
 msgid "units"
 msgstr "units"
 
-#: src/CreateForms.tsx:765
+#: src/CreateForms.tsx:762
 msgid "Add unit"
 msgstr "Add unit"
 
-#: src/CreateForms.tsx:795
+#: src/CreateForms.tsx:792
 msgid "Add a physical unit for"
 msgstr "Add a physical unit for"
 
-#: src/CreateForms.tsx:799
+#: src/CreateForms.tsx:796
 msgid "No, done"
 msgstr "No, done"
 
-#: src/CreateForms.tsx:812
+#: src/CreateForms.tsx:809
 msgid "Yes, add a unit"
 msgstr "Yes, add a unit"
 
-#: src/CreateForms.tsx:825
+#: src/CreateForms.tsx:822
 msgid "Product"
 msgstr "Product"
-
-#: src/CreateProductForm.tsx:172
-#~ msgid "Unit added"
-#~ msgstr "Unit added"
-
-#: src/CreateProductForm.tsx:176
-#~ msgid "Done."
-#~ msgstr "Done."
-
-#: src/CreateProductForm.tsx:238
-#~ msgid "Scan or leave empty"
-#~ msgstr "Scan or leave empty"
-
-#: src/CreateProductForm.tsx:240
-#~ msgid "Add a physical unit now"
-#~ msgstr "Add a physical unit now"
-
-#: src/CreateProductForm.tsx:321
-#~ msgid "Create product + unit"
-#~ msgstr "Create product + unit"
-
-#: src/Dashboard.tsx:103
-#~ msgid "No tag detected"
-#~ msgstr "No tag detected"
-
-#: src/Dashboard.tsx:104
-#~ msgid "Scan timed out or no reader found."
-#~ msgstr "Scan timed out or no reader found."
-
-#: src/Dashboard.tsx:115
-#~ msgid "Plugin:"
-#~ msgstr "Plugin:"
-
-#: src/Dashboard.tsx:116
-#~ msgid "User:"
-#~ msgstr "User:"
-
-#: src/Dashboard.tsx:120
-#~ msgid "Lookup failed"
-#~ msgstr "Lookup failed"
-
-#: src/Dashboard.tsx:121
-#~ msgid "Could not check this tag."
-#~ msgstr "Could not check this tag."
-
-#: src/Dashboard.tsx:140
-#~ msgid "Waiting for tag…"
-#~ msgstr "Waiting for tag…"
 
 #: src/Dashboard.tsx:159
 #: src/Panel.tsx:502
@@ -642,30 +392,6 @@ msgstr "Unknown tag"
 msgid "No part linked to"
 msgstr "No part linked to"
 
-#: src/Panel.tsx:96
-#~ msgid "Translated Text"
-#~ msgstr "Translated Text"
-
-#: src/Panel.tsx:97
-#~ msgid "Translated text, provided by custom code!"
-#~ msgstr "Translated text, provided by custom code!"
-
-#: src/Panel.tsx:98
-#~ msgid "Translations are loaded automatically."
-#~ msgstr "Translations are loaded automatically."
-
-#: src/Panel.tsx:99
-#~ msgid "Fallback locale is used if no translation is available"
-#~ msgstr "Fallback locale is used if no translation is available"
-
-#: src/Panel.tsx:102
-#~ msgid "Initial quantity:"
-#~ msgstr "Initial quantity:"
-
-#: src/Panel.tsx:110
-#~ msgid "Tag:"
-#~ msgstr "Tag:"
-
 #: src/Panel.tsx:185
 #: src/Panel.tsx:849
 msgid "Tag unlinked"
@@ -683,10 +409,6 @@ msgstr "Unlink failed"
 msgid "Could not remove the NFC tag. Try again."
 msgstr "Could not remove the NFC tag. Try again."
 
-#: src/Panel.tsx:201
-#~ msgid "Could not link tag. Try again."
-#~ msgstr "Could not link tag. Try again."
-
 #: src/Panel.tsx:226
 #: src/Panel.tsx:533
 #: src/Panel.tsx:846
@@ -696,14 +418,6 @@ msgstr "Tag linked"
 #: src/Panel.tsx:242
 msgid "Link failed"
 msgstr "Link failed"
-
-#: src/Panel.tsx:245
-#~ msgid "Could not check this tag. Try again."
-#~ msgstr "Could not check this tag. Try again."
-
-#: src/Panel.tsx:286
-#~ msgid "Checking tag…"
-#~ msgstr "Checking tag…"
 
 #: src/Panel.tsx:392
 msgid "Unit marked as used"
@@ -740,10 +454,6 @@ msgstr "Stock update failed"
 msgid "Could not update stock."
 msgstr "Could not update stock."
 
-#: src/Panel.tsx:430
-#~ msgid "Loading NFC config…"
-#~ msgstr "Loading NFC config…"
-
 #: src/Panel.tsx:438
 msgid "Loading NFC config..."
 msgstr "Loading NFC config..."
@@ -768,10 +478,6 @@ msgstr "Open the stock item page for lot"
 #: src/Panel.tsx:940
 msgid "Go to stock item"
 msgstr "Go to stock item"
-
-#: src/Panel.tsx:505
-#~ msgid "Stock added"
-#~ msgstr "Stock added"
 
 #: src/Panel.tsx:517
 msgid "NFC Tag"
@@ -837,10 +543,6 @@ msgstr "Expiry:"
 msgid "Received:"
 msgstr "Received:"
 
-#: src/Panel.tsx:689
-#~ msgid "No NFC tag linked to this part."
-#~ msgstr "No NFC tag linked to this part."
-
 #: src/Panel.tsx:691
 msgid "Location:"
 msgstr "Location:"
@@ -858,57 +560,13 @@ msgstr "The tag stays linked until someone unlinks it."
 msgid "Amount to remove"
 msgstr "Amount to remove"
 
-#: src/Panel.tsx:737
-#~ msgid "Quantity to add / remove"
-#~ msgstr "Quantity to add / remove"
-
-#: src/Panel.tsx:738
-#~ msgid "Available:"
-#~ msgstr "Available:"
-
-#: src/Panel.tsx:740
-#~ msgid "Loading stock..."
-#~ msgstr "Loading stock..."
-
-#: src/Panel.tsx:744
-#~ msgid "No stock items available to adjust."
-#~ msgstr "No stock items available to adjust."
-
 #: src/Panel.tsx:745
 msgid "Invalid amount"
 msgstr "Invalid amount"
 
-#: src/Panel.tsx:745
-#~ msgid "Quantity:"
-#~ msgstr "Quantity:"
-
 #: src/Panel.tsx:746
 msgid "Enter an amount greater than 0."
 msgstr "Enter an amount greater than 0."
-
-#: src/Panel.tsx:748
-#~ msgid "Concentration:"
-#~ msgstr "Concentration:"
-
-#: src/Panel.tsx:749
-#~ msgid "Measured pH:"
-#~ msgstr "Measured pH:"
-
-#: src/Panel.tsx:750
-#~ msgid "Purity:"
-#~ msgstr "Purity:"
-
-#: src/Panel.tsx:751
-#~ msgid "Stock item"
-#~ msgstr "Stock item"
-
-#: src/Panel.tsx:752
-#~ msgid "Choose location"
-#~ msgstr "Choose location"
-
-#: src/Panel.tsx:753
-#~ msgid "Opened:"
-#~ msgstr "Opened:"
 
 #: src/Panel.tsx:754
 msgid "Amount too high"
@@ -922,17 +580,9 @@ msgstr "You can't remove more than what remains. Only"
 msgid "available — choose a lower amount."
 msgstr "available — choose a lower amount."
 
-#: src/Panel.tsx:757
-#~ msgid "No location"
-#~ msgstr "No location"
-
 #: src/Panel.tsx:763
 msgid "from this unit?"
 msgstr "from this unit?"
-
-#: src/Panel.tsx:767
-#~ msgid "Available in this item:"
-#~ msgstr "Available in this item:"
 
 #: src/Panel.tsx:787
 msgid "Mark this unit as used and remove it from stock?"
@@ -942,15 +592,6 @@ msgstr "Mark this unit as used and remove it from stock?"
 msgid "Mark as used"
 msgstr "Mark as used"
 
-#: src/Panel.tsx:808
-#: src/Panel.tsx:809
-#~ msgid "Amount to add / remove"
-#~ msgstr "Amount to add / remove"
-
-#: src/Panel.tsx:810
-#~ msgid "Qty"
-#~ msgstr "Qty"
-
 #: src/Panel.tsx:825
 msgid "Hide history"
 msgstr "Hide history"
@@ -958,10 +599,6 @@ msgstr "Hide history"
 #: src/Panel.tsx:825
 msgid "Show history"
 msgstr "Show history"
-
-#: src/Panel.tsx:826
-#~ msgid "Add"
-#~ msgstr "Add"
 
 #: src/Panel.tsx:829
 msgid "No history yet."
@@ -979,14 +616,6 @@ msgstr "By"
 msgid "By unknown"
 msgstr "By unknown"
 
-#: src/Panel.tsx:853
-#~ msgid "Too much"
-#~ msgstr "Too much"
-
-#: src/Panel.tsx:854
-#~ msgid "You can't remove more than what remains."
-#~ msgstr "You can't remove more than what remains."
-
 #: src/Panel.tsx:857
 msgid "Change:"
 msgstr "Change:"
@@ -994,10 +623,6 @@ msgstr "Change:"
 #: src/Panel.tsx:857
 msgid "Result:"
 msgstr "Result:"
-
-#: src/Panel.tsx:858
-#~ msgid "Go to product"
-#~ msgstr "Go to product"
 
 #: src/Panel.tsx:873
 msgid "Other units of this product"
@@ -1023,10 +648,6 @@ msgstr "Browse stock items to link"
 #: src/Settings.tsx:104
 msgid "Agent settings (this workstation)"
 msgstr "Agent settings (this workstation)"
-
-#: src/Panel.tsx:994
-#~ msgid "Other tubes of this product"
-#~ msgstr "Other tubes of this product"
 
 #: src/Settings.tsx:57
 msgid "Saved"
@@ -1092,14 +713,6 @@ msgstr "Test connection"
 msgid "Reset to default"
 msgstr "Reset to default"
 
-#: src/Settings.tsx:135
-#~ msgid "Default (server) agent URL:"
-#~ msgstr "Default (server) agent URL:"
-
 #: src/Settings.tsx:136
 msgid "If left empty, this workstation uses the built-in default:"
 msgstr "If left empty, this workstation uses the built-in default:"
-
-#: src/Settings.tsx:138
-#~ msgid "Default scan timeout:"
-#~ msgstr "Default scan timeout:"

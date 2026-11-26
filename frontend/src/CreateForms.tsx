@@ -10,17 +10,21 @@ import {
   Loader,
   Modal,
   NumberInput,
-  Select,
   SegmentedControl,
+  Select,
   Stack,
   Text,
-  TextInput,
-  Textarea
+  Textarea,
+  TextInput
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import { IconCheck, IconPlayerStop, IconWifi, IconX } from '@tabler/icons-react';
+import {
+  IconCheck,
+  IconPlayerStop,
+  IconWifi,
+  IconX
+} from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
-import { playSound } from './sound';
 import { getEffectiveConfig } from './agentConfig';
 import {
   createItem,
@@ -31,8 +35,9 @@ import {
   fetchParts,
   findByTag
 } from './api';
-import type { PartOption } from './types';
 import { useAgentScan, useReaderStatus } from './hooks';
+import { playSound } from './sound';
+import type { PartOption } from './types';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -91,22 +96,30 @@ function parseMonthYear(input: string): { ym?: string; error?: string } {
     return { error: 'Year must have 4 digits (e.g. 2027).' };
   }
 
-  if (month < 1 || month > 12) return { error: 'Month must be between 01 and 12.' };
-  if (year < 2000 || year > 2100) return { error: 'Year must be between 2000 and 2100.' };
+  if (month < 1 || month > 12)
+    return { error: 'Month must be between 01 and 12.' };
+  if (year < 2000 || year > 2100)
+    return { error: 'Year must be between 2000 and 2100.' };
   return { ym: `${year}-${String(month).padStart(2, '0')}` };
 }
 
 /** Container types allowed for a product form (all of them when the form is unknown). */
 function containersForForm(form: string | null): string[] {
   if (form === 'Poudre') return ['Flacon poudre'];
-  if (form === 'Solution') return ['Ampoule', 'Poche', 'Flacon Solution'];
-  return ['Ampoule', 'Poche', 'Flacon Solution', 'Flacon poudre'];
+  if (form === 'Solution')
+    return ['Ampoule', 'Poche', 'Flacon Solution', 'Seringue'];
+  return ['Ampoule', 'Poche', 'Flacon Solution', 'Seringue', 'Flacon poudre'];
 }
 
 /** Unit of measure of a container managed by quantity, or null for whole units. */
 function containerUnit(container: string | null): string | null {
   if (container === 'Poche') return 'mL';
-  if (container === 'Flacon poudre' || container === 'Flacon Solution') return 'mg';
+  if (
+    container === 'Flacon poudre' ||
+    container === 'Flacon Solution' ||
+    container === 'Seringue'
+  )
+    return 'mg';
   return null;
 }
 
@@ -136,7 +149,7 @@ function ReaderDot({ connected }: { connected: boolean | null }) {
 
 /**
  * Product (part) creation form: drug name, molecule, mass/concentration, form,
- * laboratory, nature, manufacturer and excipients. The product name is built
+ * manufacturer, nature and excipients. The product name is built
  * automatically from the identity fields.
  */
 export function CreatePartForm({
@@ -150,7 +163,6 @@ export function CreatePartForm({
   const [molecule, setMolecule] = useState('');
   const [dosage, setDosage] = useState('');
   const [form, setForm] = useState<string | null>('Solution');
-  const [laboratory, setLaboratory] = useState('');
   const [nature, setNature] = useState<string | null>(null);
   const [manufacturer, setManufacturer] = useState('');
   const [excipients, setExcipients] = useState('');
@@ -168,19 +180,26 @@ export function CreatePartForm({
     };
   }, [context.api]);
 
-  const previewName = [drugName, molecule, laboratory, dosage, form]
+  const typedManufacturer = manufacturer.trim();
+  const knownManufacturer = manufacturers.find(
+    (name) => name.toLowerCase() === typedManufacturer.toLowerCase()
+  );
+  const manufacturerName = knownManufacturer ?? typedManufacturer;
+
+  const previewName = [drugName, molecule, manufacturerName, dosage, form]
     .map((s) => (s || '').trim())
     .filter(Boolean)
     .join(' ');
 
   const canSubmit =
-    !!molecule.trim() && !!dosage.trim() && (form === 'Solution' || form === 'Poudre');
+    !!molecule.trim() &&
+    !!dosage.trim() &&
+    (form === 'Solution' || form === 'Poudre');
 
   function resetFields() {
     setDrugName('');
     setMolecule('');
     setDosage('');
-    setLaboratory('');
     setNature(null);
     setManufacturer('');
     setExcipients('');
@@ -197,22 +216,23 @@ export function CreatePartForm({
         molecule: molecule.trim(),
         dosage: dosage.trim(),
         form,
-        laboratory: laboratory.trim(),
         nature: nature ?? '',
         manufacturer: manufacturer.trim(),
         excipients: excipients.trim(),
         add_unit: false
       });
       notifications.show({
-        title: data.reused_existing_part ? t`Product already exists` : t`Product created`,
+        title: data.reused_existing_part
+          ? t`Product already exists`
+          : t`Product created`,
         message: data.reused_existing_part
           ? t`This product already exists — no new product was created.`
           : data.part_name,
         color: data.reused_existing_part ? 'yellow' : 'green'
       });
       resetFields();
-      if (manufacturer.trim() && !manufacturers.includes(manufacturer.trim())) {
-        setManufacturers((prev) => [...prev, manufacturer.trim()].sort());
+      if (typedManufacturer && !knownManufacturer) {
+        setManufacturers((prev) => [...prev, typedManufacturer].sort());
       }
       if (!data.reused_existing_part && onCreated) {
         onCreated(data.part_id, data.part_name);
@@ -232,9 +252,8 @@ export function CreatePartForm({
     `${t`Molecule:`} ${molecule}`,
     `${t`Mass / concentration:`} ${dosage}`,
     `${t`Form:`} ${form}`,
-    laboratory ? `${t`Lab:`} ${laboratory}` : '',
-    nature ? `${t`Nature:`} ${nature}` : '',
-    manufacturer ? `${t`Manufacturer:`} ${manufacturer}` : ''
+    manufacturerName ? `${t`Manufacturer:`} ${manufacturerName}` : '',
+    nature ? `${t`Nature:`} ${nature}` : ''
   ]
     .filter(Boolean)
     .join(' · ');
@@ -251,8 +270,12 @@ export function CreatePartForm({
         <Stack gap='sm'>
           <Text size='sm'>{t`Create this product?`}</Text>
           <Alert color='blue' variant='light' p='xs'>
-            <Text size='sm' fw={600}>{previewName}</Text>
-            <Text size='xs' c='dimmed'>{details}</Text>
+            <Text size='sm' fw={600}>
+              {previewName}
+            </Text>
+            <Text size='xs' c='dimmed'>
+              {details}
+            </Text>
             {excipients.trim() && (
               <Text size='xs' c='dimmed'>
                 {t`Excipients:`} {excipients.trim()}
@@ -260,10 +283,19 @@ export function CreatePartForm({
             )}
           </Alert>
           <Group justify='flex-end' gap='xs'>
-            <Button variant='default' size='xs' onClick={() => setConfirmOpen(false)}>
+            <Button
+              variant='default'
+              size='xs'
+              onClick={() => setConfirmOpen(false)}
+            >
               {t`Cancel`}
             </Button>
-            <Button size='xs' color='teal' loading={submitting} onClick={doCreate}>
+            <Button
+              size='xs'
+              color='teal'
+              loading={submitting}
+              onClick={doCreate}
+            >
               {t`Confirm`}
             </Button>
           </Group>
@@ -299,12 +331,6 @@ export function CreatePartForm({
         onChange={setForm}
         required
       />
-      <TextInput
-        label={t`Laboratory`}
-        placeholder='B. Braun'
-        value={laboratory}
-        onChange={(e) => setLaboratory(e.currentTarget.value)}
-      />
       <Select
         label={t`Nature`}
         placeholder={t`Choose a nature`}
@@ -316,7 +342,7 @@ export function CreatePartForm({
       <Autocomplete
         label={t`Manufacturer`}
         description={
-          manufacturer.trim() && !manufacturers.includes(manufacturer.trim())
+          typedManufacturer && !knownManufacturer
             ? t`New manufacturer: it will be created.`
             : undefined
         }
@@ -339,7 +365,9 @@ export function CreatePartForm({
       {previewName && (
         <Alert color='blue' variant='light' p='xs'>
           <Text size='xs' c='dimmed'>{t`Product name will be:`}</Text>
-          <Text size='sm' fw={600}>{previewName}</Text>
+          <Text size='sm' fw={600}>
+            {previewName}
+          </Text>
         </Alert>
       )}
 
@@ -398,10 +426,15 @@ export function CreateItemForm({
   const unitLabel = containerUnit(container);
   const unitCount = Math.min(
     MAX_UNITS,
-    Math.max(1, Math.floor(typeof count === 'string' ? parseInt(count, 10) || 1 : count))
+    Math.max(
+      1,
+      Math.floor(typeof count === 'string' ? parseInt(count, 10) || 1 : count)
+    )
   );
 
-  const matchedLocation = locations.find((l) => l.label === locationText.trim());
+  const matchedLocation = locations.find(
+    (l) => l.label === locationText.trim()
+  );
   const isNewLocation = !!locationText.trim() && !matchedLocation;
 
   useEffect(() => {
@@ -429,7 +462,9 @@ export function CreateItemForm({
   }, [presetPartId]);
 
   useEffect(() => {
-    setTagSlots((prev) => Array.from({ length: unitCount }, (_, i) => prev[i] ?? ''));
+    setTagSlots((prev) =>
+      Array.from({ length: unitCount }, (_, i) => prev[i] ?? '')
+    );
   }, [unitCount]);
 
   const CREATE_NEW = '__create_new__';
@@ -469,7 +504,10 @@ export function CreateItemForm({
     try {
       const cfg = await getEffectiveConfig(context.api);
       playSound(cfg.sound_enabled, 'click');
-      const scanned = await scan.start(cfg.agent_base_url, cfg.scan_timeout_seconds);
+      const scanned = await scan.start(
+        cfg.agent_base_url,
+        cfg.scan_timeout_seconds
+      );
       if (scanned === null) return;
 
       if (tagSlots.some((u, i) => i !== index && u === scanned)) {
@@ -537,8 +575,15 @@ export function CreateItemForm({
       });
       return;
     }
-    if (expiryParsed.ym && expiryParsed.ym < new Date().toISOString().slice(0, 7)) {
-      if (!window.confirm(t`This expiry date has already passed. Continue anyway?`)) {
+    if (
+      expiryParsed.ym &&
+      expiryParsed.ym < new Date().toISOString().slice(0, 7)
+    ) {
+      if (
+        !window.confirm(
+          t`This expiry date has already passed. Continue anyway?`
+        )
+      ) {
         return;
       }
     }
@@ -551,7 +596,8 @@ export function CreateItemForm({
         batch: batch.trim(),
         expiry_date: expiryParsed.ym ?? null,
         received_date: receivedParsed.ym ?? null,
-        quantity: typeof quantity === 'string' ? parseFloat(quantity) || 0 : quantity,
+        quantity:
+          typeof quantity === 'string' ? parseFloat(quantity) || 0 : quantity,
         count: unitCount,
         uids: tagSlots
       };
@@ -620,7 +666,7 @@ export function CreateItemForm({
             partForm === 'Poudre'
               ? t`Powder → Flacon poudre (mg)`
               : partForm === 'Solution'
-                ? t`Solution → Ampoule (whole), Poche (mL) or Flacon Solution (mg)`
+                ? t`Solution → Ampoule (whole), Poche (mL), Flacon Solution or Seringue (mg)`
                 : undefined
           }
           placeholder={t`Choose container`}
@@ -671,7 +717,10 @@ export function CreateItemForm({
               required
             />
           ) : (
-            <Text size='xs' c='dimmed'>{t`Whole unit (ampoule) → quantity is 1.`}</Text>
+            <Text
+              size='xs'
+              c='dimmed'
+            >{t`Whole unit (ampoule) → quantity is 1.`}</Text>
           )}
           <TextInput
             label={t`Expiry`}
@@ -701,7 +750,11 @@ export function CreateItemForm({
                   <Text size='sm' w={70}>
                     {t`Unit`} {index + 1}
                   </Text>
-                  <Text size='sm' c={uid ? undefined : 'dimmed'} style={{ flex: 1 }}>
+                  <Text
+                    size='sm'
+                    c={uid ? undefined : 'dimmed'}
+                    style={{ flex: 1 }}
+                  >
                     {uid || t`No tag`}
                   </Text>
                   {scanningSlot === index ? (
@@ -779,7 +832,10 @@ export function CreateTabs({ context }: { context: InvenTreePluginContext }) {
   const [presetPartId, setPresetPartId] = useState<number | null>(null);
 
   // After a product is created, ask whether to add a unit for it.
-  const [askUnitFor, setAskUnitFor] = useState<{ id: number; name: string } | null>(null);
+  const [askUnitFor, setAskUnitFor] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
 
   return (
     <>
@@ -795,7 +851,11 @@ export function CreateTabs({ context }: { context: InvenTreePluginContext }) {
             {t`Add a physical unit for`} <strong>{askUnitFor?.name}</strong>?
           </Text>
           <Group justify='flex-end' gap='xs'>
-            <Button variant='default' size='xs' onClick={() => setAskUnitFor(null)}>
+            <Button
+              variant='default'
+              size='xs'
+              onClick={() => setAskUnitFor(null)}
+            >
               {t`No, done`}
             </Button>
             <Button

@@ -137,3 +137,76 @@ def test_event_kept_when_user_deleted(nfc_event_factory, django_user_model):
     user.delete()
     event.refresh_from_db()
     assert event.user_id is None
+
+
+def _hide_nfc_relations(monkeypatch):
+    """Make Django's deletion collector ignore the NFC relations, as after a plugin reload."""
+    from django.db.models import deletion
+
+    original = deletion.get_candidate_relations_to_delete
+
+    def without_nfc(opts):
+        return [
+            rel
+            for rel in original(opts)
+            if rel.related_model._meta.app_label != "nfc"
+        ]
+
+    monkeypatch.setattr(deletion, "get_candidate_relations_to_delete", without_nfc)
+
+
+@pytest.mark.django_db
+def test_signal_handler_is_connected():
+    """The StockItem pre_delete handler must be connected once the app is ready."""
+    from django.db.models.signals import pre_delete
+    from stock.models import StockItem
+
+    from nfc.signals import DISPATCH_UID, connect_signals
+
+    was_connected = pre_delete.disconnect(sender=StockItem, dispatch_uid=DISPATCH_UID)
+    connect_signals()
+    assert was_connected
+
+
+@pytest.mark.django_db
+def test_deleting_stock_item_removes_nfc_rows(nfc_link_factory, nfc_event_factory):
+    """Deleting a StockItem removes its tag links (active and inactive) and its events."""
+    from django.db import connection
+
+    from nfc.models import NFCEvent, NFCTagLink
+
+    link = nfc_link_factory(uid="AA11")
+    item = link.stock_item
+    nfc_link_factory(uid="BB22", stock_item=item, active=False)
+    nfc_event_factory(stock_item=item)
+
+    item.delete()
+
+    assert not NFCTagLink.objects.filter(stock_item_id=link.stock_item_id).exists()
+    assert not NFCEvent.objects.filter(stock_item_id=link.stock_item_id).exists()
+    connection.check_constraints()
+
+
+@pytest.mark.django_db
+def test_deleting_stock_item_without_registry_relations(
+    monkeypatch, nfc_link_factory, nfc_event_factory, stock_item_factory
+):
+    """NFC rows are removed even when Django's collector does not know the NFC relations."""
+    from django.db import connection
+    from stock.models import StockItem
+
+    from nfc.models import NFCEvent, NFCTagLink
+
+    _hide_nfc_relations(monkeypatch)
+
+    item = nfc_link_factory(uid="CC33").stock_item
+    nfc_event_factory(stock_item=item)
+    other = nfc_link_factory(uid="DD44").stock_item
+    pk = item.pk
+
+    StockItem.objects.filter(pk=pk).delete()
+
+    assert not NFCTagLink.objects.filter(stock_item_id=pk).exists()
+    assert not NFCEvent.objects.filter(stock_item_id=pk).exists()
+    assert NFCTagLink.objects.filter(stock_item=other).exists()
+    connection.check_constraints()

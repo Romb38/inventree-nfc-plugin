@@ -101,10 +101,10 @@ def _change_stock(stock_item, action, quantity, user, notes):
     return NFCEvent.KIND_CONSUMED, -quantity
 
 
-CONTAINER_TYPES = ("Ampoule", "Poche", "Flacon Solution", "Flacon poudre")
+CONTAINER_TYPES = ("Ampoule", "Poche", "Flacon Solution", "Seringue", "Flacon poudre")
 
 ALLOWED_CONTAINERS_BY_FORM = {
-    "Solution": ("Ampoule", "Poche", "Flacon Solution"),
+    "Solution": ("Ampoule", "Poche", "Flacon Solution", "Seringue"),
     "Poudre": ("Flacon poudre",),
 }
 
@@ -120,7 +120,7 @@ def _container_behaviour(container_type):
     """
     if container_type == "Poche":
         return "quantity", "mL"
-    if container_type in ("Flacon poudre", "Flacon Solution"):
+    if container_type in ("Flacon poudre", "Flacon Solution", "Seringue"):
         return "quantity", "mg"
     return "whole", None
 
@@ -573,7 +573,6 @@ PARAM_DRUG_NAME = "Drug name"
 PARAM_MOLECULE = "Molecule (DCI)"
 PARAM_DOSAGE = "Dosage"
 PARAM_FORM = "Form"
-PARAM_LABORATORY = "Laboratory"
 PARAM_NATURE = "Nature"
 PARAM_EXCIPIENTS = "Excipients"
 
@@ -590,7 +589,6 @@ PARAMETER_TEMPLATES = {
         "description": "Pharmaceutical form (NFC plugin)",
         "choices": ",".join(FORMS),
     },
-    PARAM_LABORATORY: {"description": "Laboratory (NFC plugin)"},
     PARAM_NATURE: {
         "description": "Formulated medicine or active substance (NFC plugin)",
         "choices": ",".join(NATURES),
@@ -599,12 +597,12 @@ PARAMETER_TEMPLATES = {
 }
 
 
-def _build_part_name(drug_name, molecule, laboratory, dosage, form):
+def _build_part_name(drug_name, molecule, manufacturer, dosage, form):
     """Build the automatic product name from its non-empty components.
 
     Example: 'Doliprane Paracétamol B. Braun 10 mg/ml Solution'.
     """
-    components = (drug_name, molecule, laboratory, dosage, form)
+    components = (drug_name, molecule, manufacturer, dosage, form)
     return " ".join(c.strip() for c in components if c and c.strip())
 
 
@@ -666,11 +664,20 @@ def _set_part_parameter(part, template_name, value):
     )
 
 
+def _find_manufacturer(name):
+    """Return the manufacturer company named `name` (case-insensitive), or None."""
+    from company.models import Company
+
+    if not name:
+        return None
+    return Company.objects.filter(is_manufacturer=True, name__iexact=name).first()
+
+
 def _get_or_create_manufacturer(name):
     """Return the manufacturer company named `name` (case-insensitive), creating it if missing."""
     from company.models import Company
 
-    company = Company.objects.filter(is_manufacturer=True, name__iexact=name).first()
+    company = _find_manufacturer(name)
     if company:
         return company
     return Company.objects.create(
@@ -723,7 +730,7 @@ class NFCCreateProductView(NFCAPIView):
     Body:
     {
       "molecule": "Paracétamol", "dosage": "10 mg/ml",
-      "form": "Solution", "laboratory": "B. Braun",
+      "form": "Solution", "manufacturer": "B. Braun",
       "batch": "A12345", "expiry_date": "2027-09-30",
       "serial": "1", "location_id": 5, "quantity": 1,
       "uid": "TAG-0001"   # optional, links a tag to the new stock item
@@ -745,7 +752,6 @@ class NFCCreateProductView(NFCAPIView):
         molecule = str(d.get("molecule", "")).strip()
         dosage = str(d.get("dosage", "")).strip()
         form = str(d.get("form", "")).strip()
-        laboratory = str(d.get("laboratory", "")).strip()
         nature = str(d.get("nature", "") or "").strip()
         manufacturer = str(d.get("manufacturer", "") or "").strip()
         excipients = str(d.get("excipients", "") or "").strip()
@@ -782,7 +788,10 @@ class NFCCreateProductView(NFCAPIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        name = _build_part_name(drug_name, molecule, laboratory, dosage, form)
+        known_manufacturer = _find_manufacturer(manufacturer)
+        if known_manufacturer:
+            manufacturer = known_manufacturer.name
+        name = _build_part_name(drug_name, molecule, manufacturer, dosage, form)
         if len(name) > PART_NAME_MAX_LENGTH:
             return Response(
                 {
@@ -848,7 +857,6 @@ class NFCCreateProductView(NFCAPIView):
                     (PARAM_MOLECULE, molecule),
                     (PARAM_DOSAGE, dosage),
                     (PARAM_FORM, form),
-                    (PARAM_LABORATORY, laboratory),
                     (PARAM_NATURE, nature),
                     (PARAM_EXCIPIENTS, excipients),
                 ):

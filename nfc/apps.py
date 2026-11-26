@@ -9,4 +9,7 @@ class NFCConfig(AppConfig):
     name = "nfc"
 
     def ready(self):
-        """This function is called whenever the NFC plugin is loaded."""
+        """Connect the plugin signal handlers whenever the NFC plugin is loaded."""
+        from .signals import connect_signals
+
+        connect_signals()
