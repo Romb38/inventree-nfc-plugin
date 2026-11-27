@@ -64,7 +64,7 @@ nano /opt/inventree/data/plugins.txt
 Add this **single** line at the bottom, pinned on the release tag to install:
 
 ```text
-inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.6.0
+inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.7.0
 ```
 
 Save in nano:
@@ -82,7 +82,7 @@ grep -i nfc /opt/inventree/data/plugins.txt
 You must see exactly one line:
 
 ```text
-inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.6.0
+inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.7.0
 ```
 
 ---
@@ -176,7 +176,7 @@ order**, with a single `invoke update` at the end:
 
    Keep a copy of the backup folder and of `.env` and `plugins.txt` outside the server.
 
-2. **Publish the plugin release**: the `v0.6.0` tag must exist on
+2. **Publish the plugin release**: the `v0.7.0` tag must exist on
    `Romb38/inventree-nfc-plugin` before the server installs it.
 
 3. **Switch the plugin source** in `/opt/inventree/data/plugins.txt`: remove
@@ -184,7 +184,7 @@ order**, with a single `invoke update` at the end:
    duplicated lines) and add the single line:
 
    ```text
-   inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.6.0
+   inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.7.0
    ```
 
 4. **Switch the InvenTree version** in `/opt/inventree/.env`:

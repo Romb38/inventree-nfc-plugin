@@ -67,6 +67,11 @@ If the tag is linked to a unit, the panel shows three zones:
 - The **other units** of the same product, shown as compact cards you can click
   to open.
 
+Below them, **Stock link** shows the full address of the scanned unit's Stock
+Item page (e.g. `https://inventree.example.org/web/stock/item/8/`); **Copy**
+puts it in the clipboard, to paste it in a message or a document. The dashboard
+scan widget shows the same link.
+
 If the tag is unknown, the panel says so; you can then create a unit for it.
 
 ## Create products and units

@@ -24,6 +24,7 @@ import { playSound } from './sound';
 import { getEffectiveConfig } from './agentConfig';
 import { getAgentHealth } from './agent';
 import { useAgentScan } from './hooks';
+import { StockItemLink } from './StockLink';
 import type { AgentHealth } from './types';
 
 interface NfcConfig {
@@ -40,6 +41,7 @@ interface TagLookupResult {
   part_description?: string;
   total_stock?: number;
   part_url?: string;
+  scanned_tube?: { id: number };
 }
 
 
@@ -231,6 +233,10 @@ function NFCDashboardItem({ context }: { context: InvenTreePluginContext }) {
               <Text size='sm'>
                 {t`Stock:`} {result.total_stock ?? '—'}
               </Text>
+
+              {result.scanned_tube && (
+                <StockItemLink stockItemId={result.scanned_tube.id} />
+              )}
 
               <Button
                 size='xs'

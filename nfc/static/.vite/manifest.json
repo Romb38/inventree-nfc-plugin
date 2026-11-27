@@ -1,14 +1,14 @@
 {
-  "_CreateForms-BOhFr9mY.js": {
-    "file": "assets/CreateForms-BOhFr9mY.js",
-    "name": "CreateForms",
+  "_Settings-DLhvtPzH.js": {
+    "file": "assets/Settings-DLhvtPzH.js",
+    "name": "Settings",
     "imports": [
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },
-  "_Settings-BzkupjBa.js": {
-    "file": "assets/Settings-BzkupjBa.js",
-    "name": "Settings",
+  "_StockLink-Bvg6Ox0n.js": {
+    "file": "assets/StockLink-Bvg6Ox0n.js",
+    "name": "StockLink",
     "imports": [
       "_agentConfig-Dr0OC9Vq.js"
     ]
@@ -18,33 +18,33 @@
     "name": "agentConfig"
   },
   "src/Dashboard.tsx": {
-    "file": "Dashboard-DCwbOcyq.js",
+    "file": "Dashboard-cAQ2ns5U.js",
     "name": "Dashboard",
     "src": "src/Dashboard.tsx",
     "isEntry": true,
     "imports": [
-      "_CreateForms-BOhFr9mY.js",
+      "_StockLink-Bvg6Ox0n.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },
   "src/Panel.tsx": {
-    "file": "Panel-r4lXZPdm.js",
+    "file": "Panel-C3B3WxDs.js",
     "name": "Panel",
     "src": "src/Panel.tsx",
     "isEntry": true,
     "imports": [
-      "_CreateForms-BOhFr9mY.js",
-      "_Settings-BzkupjBa.js",
+      "_StockLink-Bvg6Ox0n.js",
+      "_Settings-DLhvtPzH.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },
   "src/Settings.tsx": {
-    "file": "Settings-DDWT25gP.js",
+    "file": "Settings-GzYD1AnX.js",
     "name": "Settings",
     "src": "src/Settings.tsx",
     "isEntry": true,
     "imports": [
-      "_Settings-BzkupjBa.js",
+      "_Settings-DLhvtPzH.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },

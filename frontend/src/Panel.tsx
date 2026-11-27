@@ -54,6 +54,7 @@ import type {
   Tube
 } from './types';
 import { PluginSettingsDisplay } from './Settings';
+import { StockItemLink } from './StockLink';
 
 // Trim trailing zeros: 65.0000 -> "65", 65.5000 -> "65.5"
 function fmtQty(v: number | string | null | undefined): string {
@@ -927,6 +928,8 @@ function NFCPanel({ context }: { context: InvenTreePluginContext }) {
                           </Stack>
                         </div>
                       )}
+
+                      <StockItemLink stockItemId={findResult.scanned_tube.id} />
 
                       <Button
                         size='xs'

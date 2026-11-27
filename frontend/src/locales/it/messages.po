@@ -68,7 +68,7 @@ msgid "Excipients:"
 msgstr ""
 
 #: src/CreateForms.tsx:294
-#: src/Panel.tsx:467
+#: src/Panel.tsx:468
 msgid "Cancel"
 msgstr "Annulla"
 
@@ -77,7 +77,7 @@ msgid "Confirm"
 msgstr "Conferma"
 
 #: src/CreateForms.tsx:308
-#: src/Panel.tsx:971
+#: src/Panel.tsx:974
 msgid "Create product"
 msgstr "Crea prodotto"
 
@@ -142,8 +142,8 @@ msgid "This tag is linked to another unit."
 msgstr "Questo tag è collegato a un'altra unità."
 
 #: src/CreateForms.tsx:549
-#: src/Dashboard.tsx:128
-#: src/Panel.tsx:330
+#: src/Dashboard.tsx:130
+#: src/Panel.tsx:331
 msgid "Scan failed"
 msgstr "Scansione fallita"
 
@@ -168,7 +168,7 @@ msgid "This expiry date has already passed. Continue anyway?"
 msgstr "Questa data di scadenza è già passata. Continuare comunque?"
 
 #: src/CreateForms.tsx:618
-#: src/Panel.tsx:848
+#: src/Panel.tsx:849
 msgid "Unit created"
 msgstr "Unità creata"
 
@@ -274,7 +274,7 @@ msgstr "Tag NFC"
 
 #: src/CreateForms.tsx:759
 #: src/CreateForms.tsx:894
-#: src/Panel.tsx:896
+#: src/Panel.tsx:897
 msgid "Unit"
 msgstr "Unità"
 
@@ -283,9 +283,9 @@ msgid "No tag"
 msgstr ""
 
 #: src/CreateForms.tsx:776
-#: src/Dashboard.tsx:175
-#: src/Panel.tsx:578
-#: src/Panel.tsx:618
+#: src/Dashboard.tsx:177
+#: src/Panel.tsx:579
+#: src/Panel.tsx:619
 msgid "Stop scan"
 msgstr ""
 
@@ -298,15 +298,15 @@ msgid "Scan"
 msgstr "Scansiona"
 
 #: src/CreateForms.tsx:793
-#: src/Panel.tsx:763
-#: src/Panel.tsx:770
+#: src/Panel.tsx:764
+#: src/Panel.tsx:771
 msgid "Remove"
 msgstr "Rimuovi"
 
 #: src/CreateForms.tsx:805
-#: src/Dashboard.tsx:190
-#: src/Panel.tsx:593
-#: src/Panel.tsx:633
+#: src/Dashboard.tsx:192
+#: src/Panel.tsx:594
+#: src/Panel.tsx:634
 msgid "Waiting for tag..."
 msgstr "In attesa del tag..."
 
@@ -346,305 +346,305 @@ msgstr "Sì, aggiungi un'unità"
 msgid "Product"
 msgstr "Prodotto"
 
-#: src/Dashboard.tsx:159
-#: src/Panel.tsx:502
+#: src/Dashboard.tsx:161
+#: src/Panel.tsx:503
 msgid "Checking reader..."
 msgstr "Verifica del lettore..."
 
-#: src/Dashboard.tsx:161
-#: src/Panel.tsx:504
+#: src/Dashboard.tsx:163
+#: src/Panel.tsx:505
 msgid "Agent not reachable"
 msgstr "Agente non raggiungibile"
 
-#: src/Dashboard.tsx:163
-#: src/Panel.tsx:506
+#: src/Dashboard.tsx:165
+#: src/Panel.tsx:507
 #: src/Settings.tsx:81
 msgid "Reader connected"
 msgstr "Lettore connesso"
 
-#: src/Dashboard.tsx:164
-#: src/Panel.tsx:507
+#: src/Dashboard.tsx:166
+#: src/Panel.tsx:508
 msgid "Reader not available"
 msgstr "Lettore non disponibile"
 
-#: src/Dashboard.tsx:184
+#: src/Dashboard.tsx:186
 msgid "Scan NFC Tag"
 msgstr "Scansiona tag NFC"
 
-#: src/Dashboard.tsx:221
+#: src/Dashboard.tsx:223
 msgid "Part found"
 msgstr "Prodotto trovato"
 
-#: src/Dashboard.tsx:232
+#: src/Dashboard.tsx:234
 msgid "Stock:"
 msgstr "Giacenza:"
 
-#: src/Dashboard.tsx:241
+#: src/Dashboard.tsx:247
 msgid "Go to part"
 msgstr "Vai al prodotto"
 
-#: src/Dashboard.tsx:246
-#: src/Panel.tsx:945
+#: src/Dashboard.tsx:252
+#: src/Panel.tsx:948
 msgid "Unknown tag"
 msgstr "Tag sconosciuto"
 
-#: src/Dashboard.tsx:248
+#: src/Dashboard.tsx:254
 msgid "No part linked to"
 msgstr "Nessun prodotto collegato a"
 
-#: src/Panel.tsx:185
-#: src/Panel.tsx:849
+#: src/Panel.tsx:186
+#: src/Panel.tsx:850
 msgid "Tag unlinked"
 msgstr "Tag scollegato"
 
-#: src/Panel.tsx:186
+#: src/Panel.tsx:187
 msgid "NFC tag has been successfully unlinked."
 msgstr "Il tag NFC è stato scollegato con successo."
 
-#: src/Panel.tsx:192
+#: src/Panel.tsx:193
 msgid "Unlink failed"
 msgstr "Scollegamento fallito"
 
-#: src/Panel.tsx:193
+#: src/Panel.tsx:194
 msgid "Could not remove the NFC tag. Try again."
 msgstr "Impossibile rimuovere il tag NFC. Riprova."
 
-#: src/Panel.tsx:226
-#: src/Panel.tsx:533
-#: src/Panel.tsx:846
+#: src/Panel.tsx:227
+#: src/Panel.tsx:534
+#: src/Panel.tsx:847
 msgid "Tag linked"
 msgstr "Tag collegato"
 
-#: src/Panel.tsx:242
+#: src/Panel.tsx:243
 msgid "Link failed"
 msgstr "Collegamento fallito"
 
-#: src/Panel.tsx:392
+#: src/Panel.tsx:393
 msgid "Unit marked as used"
 msgstr "Unità contrassegnata come utilizzata"
 
-#: src/Panel.tsx:393
+#: src/Panel.tsx:394
 msgid "Stock removed"
 msgstr "Giacenza rimossa"
 
-#: src/Panel.tsx:397
+#: src/Panel.tsx:398
 msgid "Removed"
 msgstr "Rimosso"
 
-#: src/Panel.tsx:397
-#: src/Panel.tsx:722
+#: src/Panel.tsx:398
+#: src/Panel.tsx:723
 msgid "Remaining:"
 msgstr "Rimanente:"
 
-#: src/Panel.tsx:403
-#: src/Panel.tsx:702
-#: src/Panel.tsx:916
+#: src/Panel.tsx:404
+#: src/Panel.tsx:703
+#: src/Panel.tsx:917
 msgid "Out of stock"
 msgstr "Esaurito"
 
-#: src/Panel.tsx:404
+#: src/Panel.tsx:405
 msgid "This unit is now out of stock."
 msgstr "Questa unità è ora esaurita."
 
-#: src/Panel.tsx:424
+#: src/Panel.tsx:425
 msgid "Stock update failed"
 msgstr "Aggiornamento della giacenza fallito"
 
-#: src/Panel.tsx:425
+#: src/Panel.tsx:426
 msgid "Could not update stock."
 msgstr "Impossibile aggiornare la giacenza."
 
-#: src/Panel.tsx:438
+#: src/Panel.tsx:439
 msgid "Loading NFC config..."
 msgstr "Caricamento della configurazione NFC..."
 
-#: src/Panel.tsx:445
+#: src/Panel.tsx:446
 msgid "Config error"
 msgstr "Errore di configurazione"
 
-#: src/Panel.tsx:446
+#: src/Panel.tsx:447
 msgid "Could not load NFC plugin settings."
 msgstr "Impossibile caricare le impostazioni del plugin NFC."
 
-#: src/Panel.tsx:456
+#: src/Panel.tsx:457
 msgid "Go to this tube?"
 msgstr "Andare a questa provetta?"
 
-#: src/Panel.tsx:462
+#: src/Panel.tsx:463
 msgid "Open the stock item page for lot"
 msgstr "Apri la pagina dell'articolo per il lotto"
 
-#: src/Panel.tsx:477
-#: src/Panel.tsx:940
+#: src/Panel.tsx:478
+#: src/Panel.tsx:943
 msgid "Go to stock item"
 msgstr "Vai all'articolo"
 
-#: src/Panel.tsx:517
+#: src/Panel.tsx:518
 msgid "NFC Tag"
 msgstr "Tag NFC"
 
-#: src/Panel.tsx:526
+#: src/Panel.tsx:527
 msgid "Checking tag..."
 msgstr "Verifica del tag..."
 
-#: src/Panel.tsx:539
+#: src/Panel.tsx:540
 msgid "UID:"
 msgstr "UID:"
 
-#: src/Panel.tsx:547
+#: src/Panel.tsx:548
 msgid "Linked by"
 msgstr "Collegato da"
 
-#: src/Panel.tsx:562
+#: src/Panel.tsx:563
 msgid "Unlink tag"
 msgstr "Scollega tag"
 
-#: src/Panel.tsx:568
+#: src/Panel.tsx:569
 msgid "No NFC tag linked to this tube."
 msgstr "Nessun tag NFC collegato a questa provetta."
 
-#: src/Panel.tsx:587
+#: src/Panel.tsx:588
 msgid "Link NFC Tag"
 msgstr "Collega tag NFC"
 
-#: src/Panel.tsx:606
+#: src/Panel.tsx:607
 msgid "Scan to Find"
 msgstr "Scansiona per trovare"
 
-#: src/Panel.tsx:627
+#: src/Panel.tsx:628
 msgid "Scan Tag"
 msgstr "Scansiona tag"
 
-#: src/Panel.tsx:639
+#: src/Panel.tsx:640
 msgid "Tube found"
 msgstr "Provetta trovata"
 
-#: src/Panel.tsx:671
+#: src/Panel.tsx:672
 msgid "Scanned tube"
 msgstr "Provetta scansionata"
 
-#: src/Panel.tsx:674
+#: src/Panel.tsx:675
 msgid "No lot"
 msgstr "Nessun lotto"
 
-#: src/Panel.tsx:679
+#: src/Panel.tsx:680
 msgid "Unit no.:"
 msgstr "N. unità:"
 
-#: src/Panel.tsx:682
+#: src/Panel.tsx:683
 msgid "Lot:"
 msgstr "Lotto:"
 
-#: src/Panel.tsx:685
+#: src/Panel.tsx:686
 msgid "Expiry:"
 msgstr "Scadenza:"
 
-#: src/Panel.tsx:688
+#: src/Panel.tsx:689
 msgid "Received:"
 msgstr "Ricevuto il:"
 
-#: src/Panel.tsx:691
+#: src/Panel.tsx:692
 msgid "Location:"
 msgstr "Posizione:"
 
-#: src/Panel.tsx:705
+#: src/Panel.tsx:706
 msgid "Used on:"
 msgstr "Utilizzato il:"
 
-#: src/Panel.tsx:709
+#: src/Panel.tsx:710
 msgid "The tag stays linked until someone unlinks it."
 msgstr "Il tag rimane collegato finché qualcuno non lo scollega."
 
-#: src/Panel.tsx:719
 #: src/Panel.tsx:720
+#: src/Panel.tsx:721
 msgid "Amount to remove"
 msgstr "Quantità da rimuovere"
 
-#: src/Panel.tsx:745
+#: src/Panel.tsx:746
 msgid "Invalid amount"
 msgstr "Quantità non valida"
 
-#: src/Panel.tsx:746
+#: src/Panel.tsx:747
 msgid "Enter an amount greater than 0."
 msgstr "Inserisci una quantità maggiore di 0."
 
-#: src/Panel.tsx:754
+#: src/Panel.tsx:755
 msgid "Amount too high"
 msgstr ""
 
-#: src/Panel.tsx:755
+#: src/Panel.tsx:756
 msgid "You can't remove more than what remains. Only"
 msgstr ""
 
-#: src/Panel.tsx:755
+#: src/Panel.tsx:756
 msgid "available — choose a lower amount."
 msgstr ""
 
-#: src/Panel.tsx:763
+#: src/Panel.tsx:764
 msgid "from this unit?"
 msgstr "da questa unità?"
 
-#: src/Panel.tsx:787
+#: src/Panel.tsx:788
 msgid "Mark this unit as used and remove it from stock?"
 msgstr "Contrassegnare questa unità come utilizzata e rimuoverla dalla giacenza?"
 
-#: src/Panel.tsx:794
+#: src/Panel.tsx:795
 msgid "Mark as used"
 msgstr "Contrassegna come utilizzata"
 
-#: src/Panel.tsx:825
+#: src/Panel.tsx:826
 msgid "Hide history"
 msgstr "Nascondi cronologia"
 
-#: src/Panel.tsx:825
+#: src/Panel.tsx:826
 msgid "Show history"
 msgstr "Mostra cronologia"
 
-#: src/Panel.tsx:829
+#: src/Panel.tsx:830
 msgid "No history yet."
 msgstr "Nessuna cronologia disponibile."
 
-#: src/Panel.tsx:844
+#: src/Panel.tsx:845
 msgid "Stock change"
 msgstr "Modifica della giacenza"
 
-#: src/Panel.tsx:852
+#: src/Panel.tsx:853
 msgid "By"
 msgstr "Da"
 
-#: src/Panel.tsx:852
+#: src/Panel.tsx:853
 msgid "By unknown"
 msgstr "Da sconosciuto"
 
-#: src/Panel.tsx:857
+#: src/Panel.tsx:858
 msgid "Change:"
 msgstr "Modifica:"
 
-#: src/Panel.tsx:857
+#: src/Panel.tsx:858
 msgid "Result:"
 msgstr "Risultato:"
 
-#: src/Panel.tsx:873
+#: src/Panel.tsx:874
 msgid "Other units of this product"
 msgstr ""
 
-#: src/Panel.tsx:901
+#: src/Panel.tsx:902
 msgid "Lot"
 msgstr "Lotto"
 
-#: src/Panel.tsx:906
+#: src/Panel.tsx:907
 msgid "Exp"
 msgstr "Scad."
 
-#: src/Panel.tsx:948
+#: src/Panel.tsx:951
 msgid "No tube linked to"
 msgstr "Nessuna provetta collegata a"
 
-#: src/Panel.tsx:959
+#: src/Panel.tsx:962
 msgid "Browse stock items to link"
 msgstr "Sfoglia i prodotti da collegare"
 
-#: src/Panel.tsx:984
+#: src/Panel.tsx:987
 #: src/Settings.tsx:104
 msgid "Agent settings (this workstation)"
 msgstr "Impostazioni dell'agente (questa workstation)"
@@ -716,3 +716,23 @@ msgstr "Ripristina impostazioni predefinite"
 #: src/Settings.tsx:136
 msgid "If left empty, this workstation uses the built-in default:"
 msgstr "Se lasciato vuoto, questa workstation utilizza il valore predefinito integrato:"
+
+#: src/StockLink.tsx:71
+msgid "Copy failed"
+msgstr "Copia non riuscita"
+
+#: src/StockLink.tsx:72
+msgid "Select the link and copy it manually."
+msgstr "Seleziona il link e copialo manualmente."
+
+#: src/StockLink.tsx:82
+msgid "Stock link"
+msgstr "Link allo stock"
+
+#: src/StockLink.tsx:95
+msgid "Copied"
+msgstr "Copiato"
+
+#: src/StockLink.tsx:95
+msgid "Copy"
+msgstr "Copia"
