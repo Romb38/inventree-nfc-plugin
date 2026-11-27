@@ -76,6 +76,7 @@ class NFC(AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugi
             NFCLinkView,
             NFCManufacturersView,
             NFCPartInfoView,
+            NFCPartOptionsView,
             NFCStockItemsView,
             NFCStockView,
             NFCTagByPartView,
@@ -102,6 +103,7 @@ class NFC(AppMixin, SettingsMixin, UrlsMixin, UserInterfaceMixin, InvenTreePlugi
                 NFCManufacturersView.as_view(),
                 name="nfc-manufacturers",
             ),
+            path("parts/", NFCPartOptionsView.as_view(), name="nfc-part-options"),
             path(
                 "part-info/<int:part_id>/",
                 NFCPartInfoView.as_view(),

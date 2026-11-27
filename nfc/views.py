@@ -577,7 +577,8 @@ PARAM_NATURE = "Nature"
 PARAM_EXCIPIENTS = "Excipients"
 
 FORMS = ("Solution", "Poudre")
-NATURES = ("Médicament formulé", "Principe actif")
+NATURE_ACTIVE_SUBSTANCE = "Principe actif"
+NATURES = ("Médicament formulé", NATURE_ACTIVE_SUBSTANCE)
 EXCIPIENTS_MAX_LENGTH = 500
 PART_NAME_MAX_LENGTH = 100
 
@@ -700,6 +701,95 @@ def _attach_manufacturer(part, name):
     return company
 
 
+def _part_option_labels(parts):
+    """Build the unit form label of each part: molecule, dosage and form.
+
+    Parts without a molecule parameter (not created by the plugin) keep their
+    name. Parts sharing the same label are told apart by their manufacturers,
+    or by their primary key when that is not enough.
+
+    Args:
+        parts: Iterable of Part instances.
+
+    Returns:
+        A dict mapping each part primary key to its label.
+    """
+    from collections import Counter
+
+    from common.models import Parameter
+    from company.models import ManufacturerPart
+
+    parts = list(parts)
+    pks = [part.pk for part in parts]
+
+    params = {}
+    for param in Parameter.objects.filter(
+        model_type=_part_content_type(),
+        model_id__in=pks,
+        template__name__in=(PARAM_MOLECULE, PARAM_DOSAGE, PARAM_FORM),
+    ).select_related("template"):
+        params.setdefault(param.model_id, {})[param.template.name] = param.data
+
+    manufacturers = {}
+    for part_id, name in (
+        ManufacturerPart.objects.filter(part_id__in=pks)
+        .order_by("manufacturer__name")
+        .values_list("part_id", "manufacturer__name")
+    ):
+        manufacturers.setdefault(part_id, []).append(name)
+
+    labels = {}
+    for part in parts:
+        values = params.get(part.pk, {})
+        if (values.get(PARAM_MOLECULE) or "").strip():
+            components = (
+                values.get(PARAM_MOLECULE),
+                values.get(PARAM_DOSAGE),
+                values.get(PARAM_FORM),
+            )
+            labels[part.pk] = " ".join(
+                c.strip() for c in components if c and c.strip()
+            )
+        else:
+            labels[part.pk] = part.name
+
+    counts = Counter(labels.values())
+    for pk, label in list(labels.items()):
+        if counts[label] > 1 and manufacturers.get(pk):
+            labels[pk] = f"{label} — {', '.join(manufacturers[pk])}"
+
+    counts = Counter(labels.values())
+    for pk, label in list(labels.items()):
+        if counts[label] > 1:
+            labels[pk] = f"{label} (#{pk})"
+
+    return labels
+
+
+class NFCPartOptionsView(APIView):
+    """
+    GET /parts/
+    Products offered by the unit form, labelled by molecule, dosage and form.
+
+    Response: {"results": [{"value": "12", "label": "Paracétamol 10 mg/ml Solution"}]}
+    sorted by label.
+    """
+
+    permission_classes: ClassVar = [permissions.IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        from part.models import Part
+
+        labels = _part_option_labels(Part.objects.only("pk", "name"))
+        results = [
+            {"value": str(pk), "label": label}
+            for pk, label in sorted(
+                labels.items(), key=lambda item: (item[1].casefold(), item[0])
+            )
+        ]
+        return Response({"results": results})
+
+
 class NFCManufacturersView(APIView):
     """
     GET /manufacturers/
@@ -777,6 +867,12 @@ class NFCCreateProductView(NFCAPIView):
         if nature and nature not in NATURES:
             return Response(
                 {"error": f"Nature must be one of: {', '.join(NATURES)}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if nature == NATURE_ACTIVE_SUBSTANCE and excipients:
+            return Response(
+                {"error": "An active substance has no excipients."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -1108,10 +1204,6 @@ class NFCCreateItemView(NFCAPIView):
             )
         except ValueError:
             raise NFCActionRefused("Dates must be given as YYYY-MM or YYYY-MM-DD.")
-        if expiry_date and received_date and expiry_date < received_date:
-            raise NFCActionRefused(
-                "Expiry date is before the reception date. Please check the dates."
-            )
 
         conflict = [
             u for u in tagged if NFCTagLink.objects.filter(uid=u, active=True).exists()

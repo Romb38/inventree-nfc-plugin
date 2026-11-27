@@ -84,7 +84,9 @@ Fill in the product fields:
 - **Manufacturer** (optional) — the company that makes the drug. Pick an
   existing manufacturer or type a new name: it is created as an InvenTree
   manufacturer company and linked to the product.
-- **Excipients** (optional, up to 500 characters).
+- **Excipients** (optional, up to 500 characters). Not available for a
+  *Principe actif*: an active substance has no excipients, so the field is
+  hidden and the server refuses excipients sent with that nature.
 
 The product name is assembled automatically from drug name, molecule,
 manufacturer, mass/concentration and form (100 characters at most). A known
@@ -95,7 +97,11 @@ part parameter; missing parameter templates are created automatically.
 
 ### Create one or more units
 
-1. Choose the product.
+1. Choose the product. Products are listed by molecule, mass/concentration and
+   form (e.g. *Paracétamol 10 mg/ml Solution*), without the drug name or the
+   manufacturer. Products sharing the same label are followed by their
+   manufacturer, or by their InvenTree id. Products not created by the plugin
+   keep their InvenTree name.
 2. Choose the container type (filtered to what the product's form allows:
    Solution → Ampoule, Poche, Flacon Solution or Seringue; Poudre → Flacon
    poudre).
@@ -109,7 +115,8 @@ part parameter; missing parameter templates are created automatically.
 6. Fill in the expiry and reception dates, as **month + year**. You can type
    `mm-yyyy`, `mm/yyyy`, `yyyy-mm` or `yyyy/mm`. The expiry is stored as the
    **last day of the month** (valid until the end of the month); the panel shows
-   both dates as `MM/YYYY`.
+   both dates as `MM/YYYY`. The two dates are independent: an expiry earlier
+   than the reception date is accepted.
 7. **Tags** (optional): one line per unit. Click **Scan** on a line and place a
    tag; **Stop scan** stops waiting. A tag already used in the form or linked
    to another unit is refused. Lines left empty create units without a tag, to

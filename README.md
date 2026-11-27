@@ -122,7 +122,7 @@ On the machine running InvenTree via Docker, from the folder that holds
 persistent plugin list (`plugins.txt` in the `INVENTREE_EXT_VOLUME` folder):
 
 ```text
-inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.4.0
+inventree-nfc @ git+https://github.com/Romb38/inventree-nfc-plugin.git@v0.6.0
 ```
 
 Then install it into the containers:

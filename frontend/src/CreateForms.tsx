@@ -44,7 +44,8 @@ import type { PartOption } from './types';
 // ---------------------------------------------------------------------------
 
 /** Pharmaceutical natures offered by the product form (stored as-is). */
-const NATURES = ['Médicament formulé', 'Principe actif'];
+const NATURE_ACTIVE_SUBSTANCE = 'Principe actif';
+const NATURES = ['Médicament formulé', NATURE_ACTIVE_SUBSTANCE];
 
 /** Maximum length of the excipients text (InvenTree parameter limit). */
 const EXCIPIENTS_MAX_LENGTH = 500;
@@ -149,8 +150,8 @@ function ReaderDot({ connected }: { connected: boolean | null }) {
 
 /**
  * Product (part) creation form: drug name, molecule, mass/concentration, form,
- * manufacturer, nature and excipients. The product name is built
- * automatically from the identity fields.
+ * manufacturer, nature and excipients (none for an active substance). The
+ * product name is built automatically from the identity fields.
  */
 export function CreatePartForm({
   context,
@@ -185,6 +186,8 @@ export function CreatePartForm({
     (name) => name.toLowerCase() === typedManufacturer.toLowerCase()
   );
   const manufacturerName = knownManufacturer ?? typedManufacturer;
+  const allowsExcipients = nature !== NATURE_ACTIVE_SUBSTANCE;
+  const excipientsValue = allowsExcipients ? excipients.trim() : '';
 
   const previewName = [drugName, molecule, manufacturerName, dosage, form]
     .map((s) => (s || '').trim())
@@ -218,7 +221,7 @@ export function CreatePartForm({
         form,
         nature: nature ?? '',
         manufacturer: manufacturer.trim(),
-        excipients: excipients.trim(),
+        excipients: excipientsValue,
         add_unit: false
       });
       notifications.show({
@@ -276,9 +279,9 @@ export function CreatePartForm({
             <Text size='xs' c='dimmed'>
               {details}
             </Text>
-            {excipients.trim() && (
+            {excipientsValue && (
               <Text size='xs' c='dimmed'>
-                {t`Excipients:`} {excipients.trim()}
+                {t`Excipients:`} {excipientsValue}
               </Text>
             )}
           </Alert>
@@ -336,7 +339,10 @@ export function CreatePartForm({
         placeholder={t`Choose a nature`}
         data={NATURES}
         value={nature}
-        onChange={setNature}
+        onChange={(value) => {
+          setNature(value);
+          if (value === NATURE_ACTIVE_SUBSTANCE) setExcipients('');
+        }}
         clearable
       />
       <Autocomplete
@@ -351,16 +357,18 @@ export function CreatePartForm({
         value={manufacturer}
         onChange={setManufacturer}
       />
-      <Textarea
-        label={t`Excipients`}
-        placeholder='Mannitol, eau pour préparations injectables'
-        autosize
-        minRows={2}
-        maxLength={EXCIPIENTS_MAX_LENGTH}
-        description={`${excipients.length}/${EXCIPIENTS_MAX_LENGTH}`}
-        value={excipients}
-        onChange={(e) => setExcipients(e.currentTarget.value)}
-      />
+      {allowsExcipients && (
+        <Textarea
+          label={t`Excipients`}
+          placeholder='Mannitol, eau pour préparations injectables'
+          autosize
+          minRows={2}
+          maxLength={EXCIPIENTS_MAX_LENGTH}
+          description={`${excipients.length}/${EXCIPIENTS_MAX_LENGTH}`}
+          value={excipients}
+          onChange={(e) => setExcipients(e.currentTarget.value)}
+        />
+      )}
 
       {previewName && (
         <Alert color='blue' variant='light' p='xs'>

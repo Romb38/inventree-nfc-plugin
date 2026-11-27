@@ -11,6 +11,7 @@ from nfc.views import (
     NFCCreateProductView,
     NFCCreateItemView,
     NFCPartInfoView,
+    NFCPartOptionsView,
     NFCStockView,
     NFCHistoryView,
 )
@@ -290,9 +291,13 @@ def test_create_item_part_not_found(rf, auth_user, location_factory):
     assert res.status_code == 404
 
 
-# Ensure expiry dates earlier than reception are rejected during item creation.
+# Ensure an expiry date earlier than the reception date is accepted.
 @pytest.mark.django_db
 def test_create_item_expiry_before_reception(rf, auth_user, part_factory, location_factory):
+    from datetime import date
+
+    from stock.models import StockItem
+
     part = part_factory()
     loc = location_factory()
     request = rf.post("/", {
@@ -301,7 +306,10 @@ def test_create_item_expiry_before_reception(rf, auth_user, part_factory, locati
     }, format="json")
     request.user = auth_user
     res = _call(NFCCreateItemView.as_view(), request)
-    assert res.status_code == 400
+    assert res.status_code == 200
+    item = StockItem.objects.get(pk=res.data["created"][0]["stock_item_id"])
+    assert item.expiry_date == date(2025, 1, 1)
+    assert item.metadata["received_date"] == "2026-01-01"
 
 
 # Check that duplicate UID input is rejected when creating tagged items.
@@ -837,6 +845,28 @@ def test_product_invalid_nature(rf, auth_user):
 
 
 @pytest.mark.django_db
+def test_active_substance_rejects_excipients(rf, auth_user):
+    """An active substance cannot have excipients, and nothing is created."""
+    from part.models import Part
+
+    res = _create_product(
+        rf, auth_user, nature="Principe actif", excipients="Mannitol"
+    )
+    assert res.status_code == 400
+    assert not Part.objects.filter(name__icontains="Paracetamol").exists()
+
+
+@pytest.mark.django_db
+def test_active_substance_without_excipients(rf, auth_user):
+    """An active substance without excipients is created without the parameter."""
+    res = _create_product(rf, auth_user, nature="Principe actif", excipients="  ")
+    assert res.status_code == 200
+    params = _part_params(res.data["part_id"])
+    assert params["Nature"] == "Principe actif"
+    assert "Excipients" not in params
+
+
+@pytest.mark.django_db
 def test_product_excipients_too_long(rf, auth_user):
     """Excipients longer than 500 characters are rejected."""
     res = _create_product(rf, auth_user, excipients="x" * 501)
@@ -1181,12 +1211,12 @@ def test_unit_month_dates(rf, auth_user, part_factory, location_factory):
 @pytest.mark.parametrize(
     "dates",
     [
-        {"expiry_date": "2026-10", "received_date": "2026-11"},
         {"expiry_date": "13/2027"},
+        {"received_date": "2026/13"},
     ],
 )
 def test_unit_bad_dates(rf, auth_user, part_factory, location_factory, dates):
-    """Expiry before reception, or an unreadable date, is rejected."""
+    """An unreadable expiry or reception date is rejected."""
     res = _create_item(
         rf,
         auth_user,
@@ -1196,3 +1226,60 @@ def test_unit_bad_dates(rf, auth_user, part_factory, location_factory, dates):
         **dates,
     )
     assert res.status_code == 400
+
+
+def _part_options(rf, user):
+    request = rf.get("/")
+    request.user = user
+    res = _call(NFCPartOptionsView.as_view(), request)
+    assert res.status_code == 200
+    return {opt["value"]: opt["label"] for opt in res.data["results"]}
+
+
+@pytest.mark.django_db
+def test_part_options_show_molecule_dosage_form(rf, auth_user):
+    """Unit form options drop the drug name and manufacturer."""
+    res = _create_product(
+        rf, auth_user, drug_name="Doliprane", manufacturer="Fresenius"
+    )
+    options = _part_options(rf, auth_user)
+    assert options[str(res.data["part_id"])] == "Paracetamol 10 mg/ml Solution"
+
+
+@pytest.mark.django_db
+def test_part_options_fallback_to_part_name(rf, auth_user, part_factory):
+    """A part without molecule parameter keeps its InvenTree name."""
+    part = part_factory(name="Legacy part")
+    assert _part_options(rf, auth_user)[str(part.pk)] == "Legacy part"
+
+
+@pytest.mark.django_db
+def test_part_options_disambiguate_duplicates(rf, auth_user):
+    """Identical labels are told apart by manufacturer, then by primary key."""
+    braun = _create_product(rf, auth_user, manufacturer="B. Braun")
+    kabi = _create_product(rf, auth_user, manufacturer="Fresenius")
+    first = _create_product(rf, auth_user, drug_name="Doliprane")
+    second = _create_product(rf, auth_user, drug_name="Efferalgan")
+
+    options = _part_options(rf, auth_user)
+    assert options[str(braun.data["part_id"])] == (
+        "Paracetamol 10 mg/ml Solution — B. Braun"
+    )
+    assert options[str(kabi.data["part_id"])] == (
+        "Paracetamol 10 mg/ml Solution — Fresenius"
+    )
+    for res in (first, second):
+        pk = res.data["part_id"]
+        assert options[str(pk)] == f"Paracetamol 10 mg/ml Solution (#{pk})"
+
+
+@pytest.mark.django_db
+def test_part_options_sorted_by_label(rf, auth_user):
+    """Options are returned sorted by label, case-insensitively."""
+    _create_product(rf, auth_user, molecule="morphine")
+    _create_product(rf, auth_user, molecule="Amikacine")
+    request = rf.get("/")
+    request.user = auth_user
+    res = _call(NFCPartOptionsView.as_view(), request)
+    labels = [opt["label"] for opt in res.data["results"]]
+    assert labels == sorted(labels, key=str.casefold)

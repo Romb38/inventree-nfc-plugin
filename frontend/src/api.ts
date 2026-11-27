@@ -26,7 +26,10 @@ export async function fetchConfig(api: any): Promise<NfcConfig> {
 }
 
 /** Look up a tag UID → its product, unit and siblings. */
-export async function findByTag(api: any, uid: string): Promise<TagLookupResult> {
+export async function findByTag(
+  api: any,
+  uid: string
+): Promise<TagLookupResult> {
   const r = await api.get(`${BASE}/tag/${uid}/`);
   return r.data;
 }
@@ -99,11 +102,10 @@ export async function fetchManufacturers(api: any): Promise<string[]> {
   return r.data?.results ?? [];
 }
 
-/** Load selectable parts for the create form. */
+/** Load selectable parts for the unit form, labelled by molecule, dosage and form. */
 export async function fetchParts(api: any): Promise<PartOption[]> {
-  const r = await api.get('/api/part/?limit=500&ordering=name');
-  const results = r.data?.results ?? r.data ?? [];
-  return results.map((p: any) => ({ value: String(p.pk), label: p.name }));
+  const r = await api.get(`${BASE}/parts/`);
+  return r.data?.results ?? [];
 }
 
 /** Load selectable (non-structural) stock locations for the create form. */

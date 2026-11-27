@@ -1,6 +1,6 @@
 {
-  "_CreateForms-CuKaV9Ef.js": {
-    "file": "assets/CreateForms-CuKaV9Ef.js",
+  "_CreateForms-BOhFr9mY.js": {
+    "file": "assets/CreateForms-BOhFr9mY.js",
     "name": "CreateForms",
     "imports": [
       "_agentConfig-Dr0OC9Vq.js"
@@ -18,22 +18,22 @@
     "name": "agentConfig"
   },
   "src/Dashboard.tsx": {
-    "file": "Dashboard-CNvJnVd8.js",
+    "file": "Dashboard-DCwbOcyq.js",
     "name": "Dashboard",
     "src": "src/Dashboard.tsx",
     "isEntry": true,
     "imports": [
-      "_CreateForms-CuKaV9Ef.js",
+      "_CreateForms-BOhFr9mY.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
   },
   "src/Panel.tsx": {
-    "file": "Panel-BZXpXBSa.js",
+    "file": "Panel-r4lXZPdm.js",
     "name": "Panel",
     "src": "src/Panel.tsx",
     "isEntry": true,
     "imports": [
-      "_CreateForms-CuKaV9Ef.js",
+      "_CreateForms-BOhFr9mY.js",
       "_Settings-BzkupjBa.js",
       "_agentConfig-Dr0OC9Vq.js"
     ]
